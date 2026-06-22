@@ -57,6 +57,8 @@ const LANGS = {
         tip_dns_consistent: 'Все DNS возвращают одинаковый IP? Если нет — возможна подмена DNS.',
         dns_ok: 'Совпадают', dns_mismatch: 'Расхождение',
         dns_direct_ip: '(прямой IP, DNS не требуется)',
+        share_btn: 'Поделиться',
+        share_copied: 'Скопировано!',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Прокси отвечает',
         mtproto_kept_alive: 'Соединение удержано',
@@ -131,6 +133,8 @@ const LANGS = {
         tip_dns_consistent: 'Do all DNS return the same IP? If not, DNS spoofing is possible.',
         dns_ok: 'Consistent', dns_mismatch: 'Mismatch',
         dns_direct_ip: '(direct IP, no DNS needed)',
+        share_btn: 'Share',
+        share_copied: 'Copied!',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Proxy responds',
         mtproto_kept_alive: 'Connection kept alive',
@@ -186,6 +190,7 @@ form.addEventListener('submit', async (e) => {
         const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link }) });
         if (!res.ok) { const data = await res.json(); throw new Error(data.detail || t('request_error')); }
         const { task_id } = await res.json();
+        currentCheckId = task_id;
         connectWebSocket(task_id);
     } catch (err) { showError(err.message); btn.disabled = false; statusBar.classList.add('hidden'); }
 });
@@ -198,7 +203,7 @@ function connectWebSocket(taskId) {
         if (data.type === 'ping') return;
         if (data.status === 'queued') statusText.textContent = t('in_queue');
         else if (data.status === 'running') statusText.textContent = t('running');
-        else if (data.status === 'completed') { spinner.classList.add('hidden'); statusBar.classList.add('hidden'); btn.disabled = false; renderResults(data.results); }
+        else if (data.status === 'completed') { spinner.classList.add('hidden'); statusBar.classList.add('hidden'); btn.disabled = false; renderResults(data.results); if (currentCheckId) history.replaceState(null, '', '/result/' + currentCheckId); }
         else if (data.status === 'failed') { showError(data.error || t('check_failed')); btn.disabled = false; statusBar.classList.add('hidden'); }
     };
     ws.onerror = () => { ws.close(); fallbackPolling(taskId); };
@@ -210,7 +215,7 @@ function fallbackPolling(taskId) {
         try {
             const res = await fetch(`/api/status/${taskId}`);
             const data = await res.json();
-            if (data.status === 'completed') { clearInterval(iv); spinner.classList.add('hidden'); statusBar.classList.add('hidden'); btn.disabled = false; renderResults(data.results); }
+            if (data.status === 'completed') { clearInterval(iv); spinner.classList.add('hidden'); statusBar.classList.add('hidden'); btn.disabled = false; renderResults(data.results); if (currentCheckId) history.replaceState(null, '', '/result/' + currentCheckId); }
             else if (data.status === 'failed') { clearInterval(iv); showError(data.error || t('check_failed')); btn.disabled = false; statusBar.classList.add('hidden'); }
         } catch (_) {}
     }, 2000);
@@ -465,5 +470,50 @@ function renderResults(r) {
         return `<tr><td>${esc(name)}</td><td>${t('mode_' + fp.mode)}</td><td><span class="${icon}"></span>${errText}</td><td>${dur}</td></tr>`;
     }).join('');
 }
+
+let currentCheckId = null;
+
+document.getElementById('shareBtn').addEventListener('click', () => {
+    if (!currentCheckId) return;
+    const url = `${location.origin}/result/${currentCheckId}`;
+    copyText(url).then(() => {
+        const btn = document.getElementById('shareBtn');
+        const span = btn.querySelector('span');
+        btn.classList.add('copied');
+        span.textContent = t('share_copied');
+        setTimeout(() => { btn.classList.remove('copied'); span.textContent = t('share_btn'); }, 2000);
+    });
+});
+
+function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return Promise.resolve();
+}
+
+(async function loadSharedResult() {
+    const m = location.pathname.match(/^\/result\/([a-f0-9-]+)$/);
+    if (!m) return;
+    const checkId = m[1];
+    try {
+        const res = await fetch(`/api/result/${checkId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.results) {
+            input.value = data.proxy_link || '';
+            currentCheckId = checkId;
+            renderResults(data.results);
+        }
+    } catch (_) {}
+})();
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

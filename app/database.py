@@ -32,6 +32,7 @@ async def init_db():
             tls_result TEXT,
             fingerprint_results TEXT,
             server_info TEXT,
+            full_results TEXT,
             error_message TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP,
@@ -45,10 +46,11 @@ async def init_db():
             value TEXT NOT NULL
         )
     """)
-    try:
-        await db.execute("ALTER TABLE checks ADD COLUMN server_info TEXT")
-    except Exception:
-        pass
+    for col in ("server_info", "full_results"):
+        try:
+            await db.execute(f"ALTER TABLE checks ADD COLUMN {col} TEXT")
+        except Exception:
+            pass
     await db.commit()
 
 
@@ -62,17 +64,19 @@ async def save_check(check_id: str, proxy_link: str, server: str, port: int, sni
 
 
 async def update_check_result(check_id: str, status: str, tcp_result=None, tls_result=None,
-                               fingerprint_results=None, server_info=None, error_message=None):
+                               fingerprint_results=None, server_info=None,
+                               full_results=None, error_message=None):
     db = await get_db()
     await db.execute(
         """UPDATE checks SET status=?, tcp_result=?, tls_result=?, fingerprint_results=?,
-           server_info=?, error_message=?, completed_at=CURRENT_TIMESTAMP WHERE id=?""",
+           server_info=?, full_results=?, error_message=?, completed_at=CURRENT_TIMESTAMP WHERE id=?""",
         (
             status,
             json.dumps(tcp_result) if tcp_result else None,
             json.dumps(tls_result) if tls_result else None,
             json.dumps(fingerprint_results) if fingerprint_results else None,
             json.dumps(server_info) if server_info else None,
+            json.dumps(full_results) if full_results else None,
             error_message,
             check_id,
         ),
@@ -153,7 +157,7 @@ async def close_db():
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
-    for key in ("tcp_result", "tls_result", "fingerprint_results", "server_info"):
+    for key in ("tcp_result", "tls_result", "fingerprint_results", "server_info", "full_results"):
         if d.get(key):
             d[key] = json.loads(d[key])
     return d

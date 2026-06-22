@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TG Proxy Checker</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=6">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -36,7 +36,10 @@
             <div class="card">
                 <div class="result-header">
                     <h2 data-i18n="results_title"></h2>
-                    <span id="overallBadge" class="badge"></span>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <button class="share-btn" id="shareBtn" title="Copy link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> <span data-i18n="share_btn"></span></button>
+                        <span id="overallBadge" class="badge"></span>
+                    </div>
                 </div>
 
                 <div class="server-info" id="serverInfo"></div>
@@ -109,6 +112,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>

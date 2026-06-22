@@ -40,6 +40,7 @@ const LANGS = {
         pwd_wrong: 'Неверный текущий пароль',
         pwd_short: 'Минимум 4 символа',
         pwd_error: 'Ошибка смены пароля',
+        view_result: 'Открыть результат',
     },
     en: {
         login_title: 'Admin Login',
@@ -82,6 +83,7 @@ const LANGS = {
         pwd_wrong: 'Wrong current password',
         pwd_short: 'Minimum 4 characters',
         pwd_error: 'Failed to change password',
+        view_result: 'View result',
     },
 };
 
@@ -209,7 +211,7 @@ function renderChecks(checks, total, pages) {
     expandedRow = null;
 
     if (checks.length === 0) {
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:2rem;">${t('no_checks')}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:2rem;">${t('no_checks')}</td></tr>`;
         document.getElementById('pagination').innerHTML = '';
         return;
     }
@@ -230,6 +232,7 @@ function renderChecks(checks, total, pages) {
             <td>${tcpIcon}</td>
             <td>${tlsIcon}</td>
             <td>${esc(c.ip_address || '—')}</td>
+            <td><a href="/result/${c.id}" class="result-link" title="${t('view_result')}" onclick="event.stopPropagation()">&#128279;</a></td>
         </tr>`;
     }).join('');
 
@@ -275,7 +278,7 @@ function toggleDetail(row, checks) {
         fingerprints: check.fingerprint_results,
         error: check.error_message,
     };
-    detail.innerHTML = `<td colspan="7"><div class="detail-content">${esc(JSON.stringify(content, null, 2))}</div></td>`;
+    detail.innerHTML = `<td colspan="8"><div class="detail-content">${esc(JSON.stringify(content, null, 2))}</div></td>`;
     row.after(detail);
     expandedRow = id;
 }

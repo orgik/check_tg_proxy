@@ -49,3 +49,8 @@ async def index():
 @app.get("/admin")
 async def admin_page():
     return FileResponse(str(BASE_DIR / "templates" / "admin.html"))
+
+
+@app.get("/result/{check_id}")
+async def result_page(check_id: str):
+    return FileResponse(str(BASE_DIR / "templates" / "index.html"))

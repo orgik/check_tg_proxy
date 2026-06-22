@@ -167,6 +167,7 @@ async def _execute(task_id: str):
                 tls_result=tls_result,
                 fingerprint_results=fingerprint_results,
                 server_info=server_info,
+                full_results=results,
             )
         except Exception as e:
             task["status"] = "failed"
