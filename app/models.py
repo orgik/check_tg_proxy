@@ -4,6 +4,7 @@ from typing import Optional
 
 class CheckRequest(BaseModel):
     proxy_link: str
+    safe_mode: bool = False
 
 
 class CheckResponse(BaseModel):

@@ -59,6 +59,8 @@ const LANGS = {
         dns_direct_ip: '(прямой IP, DNS не требуется)',
         share_btn: 'Поделиться',
         share_copied: 'Скопировано!',
+        safe_mode: 'Безопасный режим (1 запрос/2 сек)',
+        tip_safe_mode: 'Некоторые прокси используют SYN rate limiter (MTproxy-reanimation). В безопасном режиме все проверки идут с интервалом 1 сек между подключениями, чтобы не попасть под блокировку. Проверка займёт больше времени.',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Прокси отвечает',
         mtproto_kept_alive: 'Соединение удержано',
@@ -135,6 +137,8 @@ const LANGS = {
         dns_direct_ip: '(direct IP, no DNS needed)',
         share_btn: 'Share',
         share_copied: 'Copied!',
+        safe_mode: 'Safe mode (1 req/2 sec)',
+        tip_safe_mode: 'Some proxies use SYN rate limiter (MTproxy-reanimation). Safe mode adds 1 second delay between all connections to avoid being blocked. Checks will take longer.',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Proxy responds',
         mtproto_kept_alive: 'Connection kept alive',
@@ -187,7 +191,8 @@ form.addEventListener('submit', async (e) => {
     statusText.textContent = t('submitting');
     errorMsg.classList.add('hidden'); resultsDiv.classList.add('hidden'); lastResults = null;
     try {
-        const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link }) });
+        const safeMode = document.getElementById('safeMode').checked;
+        const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link, safe_mode: safeMode }) });
         if (!res.ok) { const data = await res.json(); throw new Error(data.detail || t('request_error')); }
         const { task_id } = await res.json();
         currentCheckId = task_id;

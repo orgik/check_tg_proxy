@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api")
 async def create_check(req: CheckRequest, request: Request):
     ip = request.client.host if request.client else ""
     try:
-        task_id, info = await submit_check(req.proxy_link, ip)
+        task_id, info = await submit_check(req.proxy_link, ip, safe_mode=req.safe_mode)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
 

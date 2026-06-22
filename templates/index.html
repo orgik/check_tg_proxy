@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TG Proxy Checker</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=8">
+    <link rel="stylesheet" href="/static/css/style.css?v=10">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -25,6 +25,13 @@
                     <button type="submit" class="btn" id="checkBtn" data-i18n="check_btn"></button>
                 </div>
             </form>
+            <div class="check-options">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="safeMode">
+                    <span data-i18n="safe_mode"></span>
+                    <span class="has-tooltip option-hint">?<span class="tooltip" data-i18n="tip_safe_mode"></span></span>
+                </label>
+            </div>
             <div id="statusBar" class="status-bar hidden">
                 <div class="spinner" id="spinner"></div>
                 <span id="statusText"></span>
@@ -112,6 +119,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=9"></script>
+    <script src="/static/js/app.js?v=11"></script>
 </body>
 </html>

@@ -104,7 +104,7 @@ async def _check_parallel(patched: bytes, host: str, port: int, count: int = 5) 
         return {"success": False, "duration_ms": 0, "error": str(e)}
 
 
-async def run_all_fingerprint_checks(host: str, port: int, sni: str) -> list[dict]:
+async def run_all_fingerprint_checks(host: str, port: int, sni: str, delay: float = 0) -> list[dict]:
     if not sni:
         return []
 
@@ -121,9 +121,13 @@ async def run_all_fingerprint_checks(host: str, port: int, sni: str) -> list[dic
     for name, patched in prepared:
         sr = await _check_single(patched, host, port)
         results.append({"client_name": name, "mode": "single", **sr})
+        if delay:
+            await asyncio.sleep(delay)
 
         pr = await _check_parallel(patched, host, port)
         results.append({"client_name": name, "mode": "parallel", **pr})
+        if delay:
+            await asyncio.sleep(delay)
 
     return results
 

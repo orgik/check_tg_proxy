@@ -343,6 +343,53 @@ h1 {
 
 .hidden { display: none !important; }
 
+.check-options {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.option-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--bg-input);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    cursor: help;
+    border-bottom: none !important;
+}
+
+.option-hint .tooltip {
+    bottom: calc(100% + 10px);
+    left: auto;
+    right: -10px;
+    transform: none;
+    max-width: 280px;
+}
+
 .share-btn {
     display: flex;
     align-items: center;

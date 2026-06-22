@@ -58,7 +58,7 @@ def get_queue_position(task_id: str) -> int | None:
     return pos + 1
 
 
-async def submit_check(proxy_link: str, ip_address: str = "") -> tuple[str, dict]:
+async def submit_check(proxy_link: str, ip_address: str = "", safe_mode: bool = False) -> tuple[str, dict]:
     server, port, sni, secret_hex, proxy_mode = parse_proxy_link(proxy_link)
 
     task_id = str(uuid4())
@@ -70,6 +70,7 @@ async def submit_check(proxy_link: str, ip_address: str = "") -> tuple[str, dict
         "sni": sni,
         "secret_hex": secret_hex,
         "proxy_mode": proxy_mode,
+        "safe_mode": safe_mode,
         "status": "queued",
         "results": None,
         "error": None,
@@ -100,28 +101,52 @@ async def _execute(task_id: str):
         secret_hex = task.get("secret_hex", "")
         proxy_mode = task.get("proxy_mode", "unknown")
 
+        safe = task.get("safe_mode", False)
+        delay = 2.0 if safe else 0
+
+        async def _safe_delay():
+            if delay:
+                await asyncio.sleep(delay)
+
         try:
-            tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
-                check_tcp(server, port),
-                get_server_info(server, port),
-                get_checker_info(),
-                check_dns(server),
-            )
-
-            mtproto_result = None
-            if secret_hex:
-                mtproto_result = await check_mtproto(server, port, secret_hex)
-
-            tls_result, fingerprint_results = await asyncio.gather(
-                check_tls(server, port, sni),
-                run_all_fingerprint_checks(server, port, sni),
-            )
-
-            tls_cert, stability, dpi = await asyncio.gather(
-                check_tls_certificate(server, port, sni),
-                check_stability(server, port),
-                check_dpi(server, port, sni),
-            )
+            if safe:
+                server_info, checker_info, dns_check = await asyncio.gather(
+                    get_server_info(server, port),
+                    get_checker_info(),
+                    check_dns(server),
+                )
+                tcp_result = await check_tcp(server, port)
+                await _safe_delay()
+                mtproto_result = None
+                if secret_hex:
+                    mtproto_result = await check_mtproto(server, port, secret_hex)
+                    await _safe_delay()
+                tls_result = await check_tls(server, port, sni)
+                await _safe_delay()
+                tls_cert = await check_tls_certificate(server, port, sni)
+                await _safe_delay()
+                fingerprint_results = await run_all_fingerprint_checks(server, port, sni, delay=delay)
+                stability = await check_stability(server, port, delay=delay)
+                dpi = await check_dpi(server, port, sni, delay=delay)
+            else:
+                tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
+                    check_tcp(server, port),
+                    get_server_info(server, port),
+                    get_checker_info(),
+                    check_dns(server),
+                )
+                mtproto_result = None
+                if secret_hex:
+                    mtproto_result = await check_mtproto(server, port, secret_hex)
+                tls_result, fingerprint_results = await asyncio.gather(
+                    check_tls(server, port, sni),
+                    run_all_fingerprint_checks(server, port, sni),
+                )
+                tls_cert, stability, dpi = await asyncio.gather(
+                    check_tls_certificate(server, port, sni),
+                    check_stability(server, port),
+                    check_dpi(server, port, sni),
+                )
 
             fp_pass = sum(1 for f in fingerprint_results if f["success"])
             fp_total = len(fingerprint_results)

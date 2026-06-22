@@ -90,7 +90,7 @@ def _parse_cert_field(field_tuple) -> str:
     return ", ".join(parts)
 
 
-async def check_stability(host: str, port: int, count: int = 10) -> dict:
+async def check_stability(host: str, port: int, count: int = 10, delay: float = 0) -> dict:
     results = []
 
     async def _single_connect(i):
@@ -108,11 +108,12 @@ async def check_stability(host: str, port: int, count: int = 10) -> dict:
         except Exception as e:
             return {"ok": False, "rtt_ms": 0, "error": str(e)}
 
+    pause = max(delay, 0.3)
     for i in range(count):
         r = await _single_connect(i)
         results.append(r)
         if i < count - 1:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(pause)
 
     success = sum(1 for r in results if r["ok"])
     rtts = [r["rtt_ms"] for r in results if r["ok"]]
@@ -151,12 +152,16 @@ async def check_stability(host: str, port: int, count: int = 10) -> dict:
     }
 
 
-async def check_dpi(host: str, port: int, sni: str) -> dict:
+async def check_dpi(host: str, port: int, sni: str, delay: float = 0) -> dict:
     result = {}
 
     if sni:
         wrong_sni = await _try_tls_connect(host, port, "decoy-" + sni[:20] + ".example.com")
+        if delay:
+            await asyncio.sleep(delay)
         correct_sni = await _try_tls_connect(host, port, sni)
+        if delay:
+            await asyncio.sleep(delay)
         result["wrong_sni"] = wrong_sni
         result["correct_sni"] = correct_sni
         if wrong_sni["ok"] and correct_sni["ok"]:
@@ -167,6 +172,8 @@ async def check_dpi(host: str, port: int, sni: str) -> dict:
             result["sni_filtering"] = True
 
     http_result = await _http_probe(host, port)
+    if delay:
+        await asyncio.sleep(delay)
     result["http_probe"] = http_result
 
     rst_result = await _check_rst(host, port)
