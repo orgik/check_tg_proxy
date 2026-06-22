@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - TG Proxy Checker</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .login-card { max-width: 400px; margin: 4rem auto; }
+        .login-card input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+            outline: none;
+        }
+        .login-card input:focus { border-color: var(--accent); }
+        .login-card .btn { width: 100%; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-card .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-top: 0.25rem;
+        }
+        .controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .controls input, .controls select {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+        }
+        .controls select { cursor: pointer; }
+        .checks-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .checks-table th {
+            text-align: left;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+        .checks-table td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid rgba(51,65,85,0.4);
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .checks-table tr:hover td { background: rgba(59,130,246,0.05); }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .pagination button {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 6px;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination span { color: var(--text-secondary); font-size: 0.85rem; }
+        .detail-row td { padding: 1rem !important; white-space: normal !important; max-width: none !important; }
+        .detail-content {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 0.8rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .back-link {
+            display: inline-block;
+            color: var(--accent);
+            text-decoration: none;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .logout-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: auto;
+        }
+        .admin-header { display: flex; align-items: center; margin-bottom: 1.5rem; gap: 1rem; }
+        .admin-header h1 { flex: 1; text-align: left; margin-bottom: 0; }
+        .pwd-section {
+            margin-bottom: 1.5rem;
+        }
+        .pwd-toggle {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .pwd-toggle:hover { border-color: var(--accent); color: var(--text-primary); }
+        .pwd-form {
+            margin-top: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .pwd-form input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.45rem 0.7rem;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+            width: 180px;
+        }
+        .pwd-form input:focus { border-color: var(--accent); }
+        .pwd-form .btn-sm {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0.45rem 1rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .pwd-form .btn-sm:hover { background: var(--accent-hover); }
+        .pwd-msg {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        .pwd-msg.ok { color: var(--success); }
+        .pwd-msg.err { color: var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 1000px;">
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru">RU</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+
+        <!-- Вход -->
+        <div id="loginSection">
+            <div class="card login-card">
+                <h1 style="margin-bottom: 1.5rem; font-size: 1.3rem;" data-i18n="login_title"></h1>
+                <form id="loginForm">
+                    <input type="password" id="passwordInput" data-i18n-placeholder="password_placeholder" autocomplete="current-password">
+                    <button type="submit" class="btn" data-i18n="login_btn"></button>
+                </form>
+                <div id="loginError" class="error-msg hidden" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+
+        <!-- Панель -->
+        <div id="dashSection" class="hidden">
+            <div class="admin-header">
+                <a href="/" class="back-link" data-i18n="back_link"></a>
+                <h1 data-i18n="admin_title"></h1>
+                <button class="logout-btn" id="logoutBtn" data-i18n="logout_btn"></button>
+            </div>
+
+            <div class="pwd-section">
+                <button class="pwd-toggle" id="pwdToggle" data-i18n="pwd_change"></button>
+                <div id="pwdFormWrap" class="hidden">
+                    <form class="pwd-form" id="pwdForm">
+                        <input type="password" id="pwdCurrent" data-i18n-placeholder="pwd_current">
+                        <input type="password" id="pwdNew" data-i18n-placeholder="pwd_new">
+                        <button type="submit" class="btn-sm" data-i18n="pwd_save"></button>
+                    </form>
+                    <div id="pwdMsg" class="pwd-msg hidden"></div>
+                </div>
+            </div>
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label" data-i18n="stat_total"></div></div>
+                <div class="stat-card"><div class="stat-value" id="statToday">0</div><div class="stat-label" data-i18n="stat_today"></div></div>
+                <div class="stat-card"><div class="stat-value" id="statCompleted">0</div><div class="stat-label" data-i18n="stat_completed"></div></div>
+                <div class="stat-card"><div class="stat-value" id="statTcpOk">0</div><div class="stat-label" data-i18n="stat_tcp_ok"></div></div>
+            </div>
+
+            <div class="card">
+                <div class="controls">
+                    <input type="text" id="searchInput" data-i18n-placeholder="search_placeholder">
+                    <select id="statusFilter">
+                        <option value="" data-i18n="filter_all"></option>
+                        <option value="completed" data-i18n="filter_completed"></option>
+                        <option value="failed" data-i18n="filter_failed"></option>
+                        <option value="running" data-i18n="filter_running"></option>
+                        <option value="pending" data-i18n="filter_pending"></option>
+                    </select>
+                </div>
+
+                <table class="checks-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="th_time"></th>
+                            <th data-i18n="th_link"></th>
+                            <th data-i18n="th_server"></th>
+                            <th data-i18n="th_status"></th>
+                            <th>TCP</th>
+                            <th>TLS</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checksBody"></tbody>
+                </table>
+
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/admin.js?v=2"></script>
+</body>
+</html>

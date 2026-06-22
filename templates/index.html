@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TG Proxy Checker</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru">RU</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+
+        <h1>TG Proxy Checker</h1>
+        <p class="subtitle" data-i18n="subtitle"></p>
+
+        <div class="card">
+            <form id="checkForm">
+                <div class="input-group">
+                    <input type="text" id="proxyLink" placeholder="tg://proxy?server=...&port=...&secret=..." autocomplete="off">
+                    <button type="submit" class="btn" id="checkBtn" data-i18n="check_btn"></button>
+                </div>
+            </form>
+            <div id="statusBar" class="status-bar hidden">
+                <div class="spinner" id="spinner"></div>
+                <span id="statusText"></span>
+            </div>
+            <div id="errorMsg" class="error-msg hidden"></div>
+        </div>
+
+        <div id="results" class="hidden">
+            <div class="card">
+                <div class="result-header">
+                    <h2 data-i18n="results_title"></h2>
+                    <span id="overallBadge" class="badge"></span>
+                </div>
+
+                <div class="server-info" id="serverInfo"></div>
+
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="label" data-i18n="tcp_label"></div>
+                        <div class="value" id="tcpResult"></div>
+                    </div>
+                    <div class="result-item">
+                        <div class="label" data-i18n="tls_label"></div>
+                        <div class="value" id="tlsResult"></div>
+                    </div>
+                </div>
+                <div id="dcWarning" class="dc-warning hidden"></div>
+            </div>
+
+            <div class="card" id="serverInfoCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="server_info_title"></h2>
+                <div class="info-grid" id="serverInfoGrid"></div>
+            </div>
+
+            <div class="card" id="checkerInfoCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="checker_info_title"></h2>
+                <div class="info-grid" id="checkerInfoGrid"></div>
+            </div>
+
+            <div class="card" id="tlsCertCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="tls_cert_title"></h2>
+                <div class="info-grid" id="tlsCertGrid"></div>
+            </div>
+
+            <div class="card" id="stabilityCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="stability_title"></h2>
+                <div id="stabilityContent"></div>
+            </div>
+
+            <div class="card" id="dpiCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="dpi_title"></h2>
+                <div class="info-grid" id="dpiGrid"></div>
+            </div>
+
+            <div class="card" id="dnsCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="dns_title"></h2>
+                <div class="info-grid" id="dnsGrid"></div>
+            </div>
+
+            <div class="card" id="fpCard">
+                <h2 style="margin-bottom: 1rem; font-size: 1.1rem;" data-i18n="fp_title"></h2>
+                <table class="fp-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="col_client"></th>
+                            <th data-i18n="col_mode"></th>
+                            <th data-i18n="col_status"></th>
+                            <th data-i18n="col_time"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="fpBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=2"></script>
+</body>
+</html>

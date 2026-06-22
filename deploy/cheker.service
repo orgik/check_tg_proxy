@@ -1,0 +1,16 @@
+[Unit]
+Description=Cheker - Telegram Proxy Checker
+After=network.target
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/cheker
+EnvironmentFile=/opt/cheker/.env
+ExecStart=/opt/cheker/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
