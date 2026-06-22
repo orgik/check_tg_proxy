@@ -57,10 +57,23 @@ const LANGS = {
         tip_dns_consistent: 'Все DNS возвращают одинаковый IP? Если нет — возможна подмена DNS.',
         dns_ok: 'Совпадают', dns_mismatch: 'Расхождение',
         dns_direct_ip: '(прямой IP, DNS не требуется)',
+        mtproto_label: 'MTProto',
+        mtproto_ok: 'Прокси отвечает',
+        mtproto_kept_alive: 'Соединение удержано',
+        mtproto_fail: 'Не отвечает',
+        mtproto_rejected: 'Init отклонён',
+        mode_label: 'Режим',
+        mode_fake_tls: 'Fake TLS',
+        mode_padded: 'Padded Intermediate',
+        mode_simple: 'Simple',
+        mode_unknown: 'Неизвестно',
+        tip_mtproto: 'Проверка MTProto протокола — отправляется обфусцированный пакет инициализации. Если прокси отвечает — он работает.',
         dc_warning_title: 'Сервер отклоняет подключения из дата-центра',
         dc_warning_text: 'Прокси-сервер отказывает в подключении с нашего IP ({ip}, {location}). Многие MTProto-прокси блокируют датацентровые IP для защиты от обнаружения. Прокси может быть доступен с вашего домашнего/мобильного IP.',
         dc_warning_title_timeout: 'Сервер не отвечает из нашего дата-центра',
         dc_warning_text_timeout: 'Прокси-сервер не отвечает на подключения с нашего IP ({ip}, {location}). Сервер может фильтровать подключения по IP или геолокации. Прокси может быть доступен с вашего домашнего/мобильного IP.',
+        dc_warning_title_tls: 'TLS не работает из нашего дата-центра',
+        dc_warning_text_tls: 'TCP-порт открыт, но TLS-рукопожатие не проходит с нашего IP ({ip}, {location}). Сервер может фильтровать TLS-подключения с датацентровых IP. Прокси может работать с вашего домашнего/мобильного IP.',
     },
     en: {
         subtitle: 'Check Telegram MTProto proxy connectivity and TLS fingerprints',
@@ -118,10 +131,23 @@ const LANGS = {
         tip_dns_consistent: 'Do all DNS return the same IP? If not, DNS spoofing is possible.',
         dns_ok: 'Consistent', dns_mismatch: 'Mismatch',
         dns_direct_ip: '(direct IP, no DNS needed)',
+        mtproto_label: 'MTProto',
+        mtproto_ok: 'Proxy responds',
+        mtproto_kept_alive: 'Connection kept alive',
+        mtproto_fail: 'No response',
+        mtproto_rejected: 'Init rejected',
+        mode_label: 'Mode',
+        mode_fake_tls: 'Fake TLS',
+        mode_padded: 'Padded Intermediate',
+        mode_simple: 'Simple',
+        mode_unknown: 'Unknown',
+        tip_mtproto: 'MTProto protocol check — sends an obfuscated init packet. If the proxy responds, it is working.',
         dc_warning_title: 'Server rejects datacenter connections',
         dc_warning_text: 'The proxy server refuses connections from our IP ({ip}, {location}). Many MTProto proxies block datacenter IPs to avoid detection. The proxy may be accessible from your home/mobile IP.',
         dc_warning_title_timeout: 'Server not responding from our datacenter',
         dc_warning_text_timeout: 'The proxy server does not respond to connections from our IP ({ip}, {location}). The server may filter connections by IP or geolocation. The proxy may be accessible from your home/mobile IP.',
+        dc_warning_title_tls: 'TLS not working from our datacenter',
+        dc_warning_text_tls: 'TCP port is open, but TLS handshake fails from our IP ({ip}, {location}). The server may filter TLS connections from datacenter IPs. The proxy may work from your home/mobile IP.',
     },
 };
 
@@ -351,7 +377,7 @@ function renderResults(r) {
     document.getElementById('serverInfo').innerHTML =
         `<span><span class="label-sm">${t('server')}:</span> <span class="val">${esc(r.server)}</span></span>` +
         `<span><span class="label-sm">${t('port')}:</span> <span class="val">${r.port}</span></span>` +
-        `<span><span class="label-sm">SNI:</span> <span class="val">${esc(r.sni || '—')}</span></span>`;
+        (r.sni ? `<span><span class="label-sm">SNI:</span> <span class="val">${esc(r.sni)}</span></span>` : '');
 
     const tcp = r.tcp;
     document.getElementById('tcpResult').innerHTML = tcp.success
@@ -365,14 +391,49 @@ function renderResults(r) {
     else
         document.getElementById('tlsResult').innerHTML = `<span class="fail">${t('error')}</span><span class="rtt">${esc(tls.error)}</span>`;
 
+    const mtItem = document.getElementById('mtprotoItem');
+    const mtResult = document.getElementById('mtprotoResult');
+    if (r.mtproto) {
+        mtItem.style.display = '';
+        const mt = r.mtproto;
+        if (mt.success && mt.detail === 'responded') {
+            mtResult.innerHTML = `<span class="ok">${t('mtproto_ok')}</span><span class="rtt">${mt.rtt_ms} ${t('ms')}</span>`;
+        } else if (mt.success && mt.detail === 'kept_alive') {
+            mtResult.innerHTML = `<span class="ok">${t('mtproto_kept_alive')}</span><span class="rtt">${mt.rtt_ms} ${t('ms')}</span>`;
+        } else if (mt.error === 'init rejected') {
+            mtResult.innerHTML = `<span class="skip">${t('mtproto_rejected')}</span><span class="rtt">${mt.rtt_ms} ${t('ms')}</span>`;
+        } else {
+            mtResult.innerHTML = `<span class="fail">${t('mtproto_fail')}</span><span class="rtt">${esc(mt.error)}</span>`;
+        }
+    } else {
+        mtItem.style.display = 'none';
+    }
+
+    const modeItem = document.getElementById('modeItem');
+    const modeResult = document.getElementById('modeResult');
+    if (r.proxy_mode) {
+        modeItem.style.display = '';
+        modeResult.textContent = t('mode_' + r.proxy_mode);
+    } else {
+        modeItem.style.display = 'none';
+    }
+
     const dcWarn = document.getElementById('dcWarning');
-    const tcpDown = !tcp.success && tcp.error;
-    if (tcpDown && r.checker_info && r.checker_info.ip) {
+    const tcpFail = !tcp.success && tcp.error;
+    const tlsFail = tls.success === false;
+    const showWarn = r.checker_info && r.checker_info.ip && (tcpFail || (tcp.success && tlsFail && r.overall_status === 'unhealthy'));
+
+    if (showWarn) {
         const ci = r.checker_info;
         const loc = [ci.city, ci.country].filter(Boolean).join(', ');
-        const isRefused = tcp.error.toLowerCase().includes('refused');
-        const titleKey = isRefused ? 'dc_warning_title' : 'dc_warning_title_timeout';
-        const textKey = isRefused ? 'dc_warning_text' : 'dc_warning_text_timeout';
+        let titleKey, textKey;
+        if (tcpFail && tcp.error.toLowerCase().includes('refused')) {
+            titleKey = 'dc_warning_title'; textKey = 'dc_warning_text';
+        } else if (tcpFail) {
+            titleKey = 'dc_warning_title_timeout'; textKey = 'dc_warning_text_timeout';
+        } else {
+            titleKey = 'dc_warning_title_tls'; textKey = 'dc_warning_text_tls';
+        }
         const msg = t(textKey).replace('{ip}', ci.ip).replace('{location}', loc);
         dcWarn.innerHTML = `<span class="warn-icon">&#9888;</span><span class="warn-text"><strong>${t(titleKey)}</strong><br>${msg}</span>`;
         dcWarn.classList.remove('hidden');

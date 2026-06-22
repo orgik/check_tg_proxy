@@ -18,7 +18,8 @@ def _decode_secret(secret: str) -> bytes | None:
     return None
 
 
-def parse_proxy_link(url: str) -> tuple[str, int, str]:
+def parse_proxy_link(url: str) -> tuple[str, int, str, str, str]:
+    """Returns (server, port, sni, secret_hex, proxy_mode)."""
     url = url.strip()
     if "t.me/proxy" in url:
         idx = url.find("t.me/proxy") + len("t.me/proxy")
@@ -45,9 +46,21 @@ def parse_proxy_link(url: str) -> tuple[str, int, str]:
         raise ValueError(f"Port out of range: {port}")
 
     sni = ""
+    secret_hex = ""
+    proxy_mode = "unknown"
+
     if secret:
         b = _decode_secret(secret)
-        if b and len(b) > 17 and b[0] == 0xEE:
-            sni = b[17:].decode("utf-8", errors="replace")
+        if b:
+            secret_hex = b.hex()
+            if b[0] == 0xEE and len(b) > 17:
+                proxy_mode = "fake_tls"
+                sni = b[17:].decode("utf-8", errors="replace")
+            elif b[0] == 0xDD:
+                proxy_mode = "padded"
+            elif len(b) == 16:
+                proxy_mode = "simple"
+            else:
+                proxy_mode = "unknown"
 
-    return server, port, sni
+    return server, port, sni, secret_hex, proxy_mode

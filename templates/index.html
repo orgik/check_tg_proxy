@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TG Proxy Checker</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=5">
+    <link rel="stylesheet" href="/static/css/style.css?v=6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -49,6 +49,14 @@
                     <div class="result-item">
                         <div class="label" data-i18n="tls_label"></div>
                         <div class="value" id="tlsResult"></div>
+                    </div>
+                    <div class="result-item" id="mtprotoItem" style="display:none">
+                        <div class="label" data-i18n="mtproto_label"></div>
+                        <div class="value" id="mtprotoResult"></div>
+                    </div>
+                    <div class="result-item" id="modeItem" style="display:none">
+                        <div class="label" data-i18n="mode_label"></div>
+                        <div class="value" id="modeResult"></div>
                     </div>
                 </div>
                 <div id="dcWarning" class="dc-warning hidden"></div>
@@ -101,6 +109,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=7"></script>
 </body>
 </html>

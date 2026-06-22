@@ -7,6 +7,7 @@ from app.checks.tcp_tls_check import check_tcp, check_tls
 from app.checks.fingerprint_check import run_all_fingerprint_checks
 from app.checks.server_info import get_server_info, get_checker_info
 from app.checks.diagnostics import check_tls_certificate, check_stability, check_dpi, check_dns
+from app.checks.mtproto_check import check_mtproto
 from app.proxy_parser import parse_proxy_link
 from app import database
 
@@ -58,7 +59,7 @@ def get_queue_position(task_id: str) -> int | None:
 
 
 async def submit_check(proxy_link: str, ip_address: str = "") -> tuple[str, dict]:
-    server, port, sni = parse_proxy_link(proxy_link)
+    server, port, sni, secret_hex, proxy_mode = parse_proxy_link(proxy_link)
 
     task_id = str(uuid4())
     task = {
@@ -67,6 +68,8 @@ async def submit_check(proxy_link: str, ip_address: str = "") -> tuple[str, dict
         "server": server,
         "port": port,
         "sni": sni,
+        "secret_hex": secret_hex,
+        "proxy_mode": proxy_mode,
         "status": "queued",
         "results": None,
         "error": None,
@@ -94,6 +97,8 @@ async def _execute(task_id: str):
         server = task["server"]
         port = task["port"]
         sni = task["sni"]
+        secret_hex = task.get("secret_hex", "")
+        proxy_mode = task.get("proxy_mode", "unknown")
 
         try:
             tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
@@ -102,6 +107,10 @@ async def _execute(task_id: str):
                 get_checker_info(),
                 check_dns(server),
             )
+
+            mtproto_result = None
+            if secret_hex:
+                mtproto_result = await check_mtproto(server, port, secret_hex)
 
             tls_result, fingerprint_results = await asyncio.gather(
                 check_tls(server, port, sni),
@@ -117,7 +126,14 @@ async def _execute(task_id: str):
             fp_pass = sum(1 for f in fingerprint_results if f["success"])
             fp_total = len(fingerprint_results)
 
-            if tcp_result["success"] and (tls_result.get("success") is True or tls_result.get("success") is None):
+            if mtproto_result and mtproto_result.get("success"):
+                if fp_total == 0 or fp_pass == fp_total:
+                    overall = "healthy"
+                elif fp_pass > 0:
+                    overall = "degraded"
+                else:
+                    overall = "degraded"
+            elif tcp_result["success"] and (tls_result.get("success") is True or tls_result.get("success") is None):
                 if fp_total == 0 or fp_pass == fp_total:
                     overall = "healthy"
                 else:
@@ -129,8 +145,10 @@ async def _execute(task_id: str):
                 "server": server,
                 "port": port,
                 "sni": sni,
+                "proxy_mode": proxy_mode,
                 "tcp": tcp_result,
                 "tls": tls_result,
+                "mtproto": mtproto_result,
                 "fingerprints": fingerprint_results,
                 "server_info": server_info,
                 "checker_info": checker_info,

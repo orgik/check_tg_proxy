@@ -61,8 +61,10 @@ class CheckResults(BaseModel):
     server: str
     port: int
     sni: str
+    proxy_mode: Optional[str] = None
     tcp: TcpCheckResult
     tls: TlsCheckResult
+    mtproto: Optional[dict] = None
     fingerprints: list[FingerprintResult]
     server_info: Optional[ServerInfo] = None
     checker_info: Optional[CheckerInfo] = None
