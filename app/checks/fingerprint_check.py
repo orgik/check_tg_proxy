@@ -117,28 +117,12 @@ async def run_all_fingerprint_checks(host: str, port: int, sni: str) -> list[dic
         patched = patch_sni(hello["raw"], sni)
         prepared.append((hello["name"], patched))
 
-    single_coros = [_check_single(p, host, port) for _, p in prepared]
-    single_raw = await asyncio.gather(*single_coros, return_exceptions=True)
-
-    parallel_sem = asyncio.Semaphore(2)
-
-    async def _guarded_parallel(patched):
-        async with parallel_sem:
-            return await _check_parallel(patched, host, port)
-
-    parallel_coros = [_guarded_parallel(p) for _, p in prepared]
-    parallel_raw = await asyncio.gather(*parallel_coros, return_exceptions=True)
-
     results = []
-    for i, (name, _) in enumerate(prepared):
-        sr = single_raw[i]
-        if isinstance(sr, Exception):
-            sr = {"success": False, "duration_ms": 0, "error": str(sr)}
+    for name, patched in prepared:
+        sr = await _check_single(patched, host, port)
         results.append({"client_name": name, "mode": "single", **sr})
 
-        pr = parallel_raw[i]
-        if isinstance(pr, Exception):
-            pr = {"success": False, "duration_ms": 0, "error": str(pr)}
+        pr = await _check_parallel(patched, host, port)
         results.append({"client_name": name, "mode": "parallel", **pr})
 
     return results
