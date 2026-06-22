@@ -96,17 +96,22 @@ async def _execute(task_id: str):
         sni = task["sni"]
 
         try:
-            (tcp_result, tls_result, fingerprint_results, server_info, checker_info,
-             tls_cert, stability, dpi, dns_check) = await asyncio.gather(
+            tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
                 check_tcp(server, port),
-                check_tls(server, port, sni),
-                run_all_fingerprint_checks(server, port, sni),
                 get_server_info(server, port),
                 get_checker_info(),
+                check_dns(server),
+            )
+
+            tls_result, fingerprint_results = await asyncio.gather(
+                check_tls(server, port, sni),
+                run_all_fingerprint_checks(server, port, sni),
+            )
+
+            tls_cert, stability, dpi = await asyncio.gather(
                 check_tls_certificate(server, port, sni),
                 check_stability(server, port),
                 check_dpi(server, port, sni),
-                check_dns(server),
             )
 
             fp_pass = sum(1 for f in fingerprint_results if f["success"])

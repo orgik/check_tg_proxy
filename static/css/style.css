@@ -203,6 +203,12 @@ h1 {
     color: var(--text-primary);
     font-weight: 500;
     text-align: right;
+    word-break: break-word;
+    max-width: 60%;
+}
+
+.info-row .info-value code {
+    word-break: break-all;
 }
 
 .flag-img {
@@ -335,7 +341,7 @@ h1 {
 .server-info .label-sm { color: var(--text-secondary); }
 .server-info .val { color: var(--text-primary); font-weight: 500; }
 
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 .lang-switch {
     position: absolute;

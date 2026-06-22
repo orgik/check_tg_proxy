@@ -5,6 +5,41 @@ import time
 import struct
 
 
+def _format_name(name) -> str:
+    from cryptography.x509.oid import NameOID
+    parts = []
+    for attr in [NameOID.COMMON_NAME, NameOID.ORGANIZATION_NAME, NameOID.COUNTRY_NAME]:
+        vals = name.get_attributes_for_oid(attr)
+        if vals:
+            parts.append(vals[0].value)
+    return ", ".join(parts) if parts else name.rfc4514_string()
+
+
+def _parse_der_cert(der_bytes: bytes) -> dict:
+    try:
+        from cryptography import x509
+        cert = x509.load_der_x509_certificate(der_bytes)
+        subject = _format_name(cert.subject)
+        issuer = _format_name(cert.issuer)
+        not_before = cert.not_valid_before_utc.strftime("%Y-%m-%d %H:%M UTC")
+        not_after = cert.not_valid_after_utc.strftime("%Y-%m-%d %H:%M UTC")
+        san = []
+        try:
+            ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            san = ext.value.get_values_for_type(x509.DNSName)
+        except x509.ExtensionNotFound:
+            pass
+        return {
+            "subject": subject,
+            "issuer": issuer,
+            "not_before": not_before,
+            "not_after": not_after,
+            "san": san[:5],
+        }
+    except Exception:
+        return {}
+
+
 async def check_tls_certificate(host: str, port: int, sni: str) -> dict:
     if not sni:
         return {"available": False, "error": "no SNI"}
@@ -17,33 +52,27 @@ async def check_tls_certificate(host: str, port: int, sni: str) -> dict:
             timeout=10,
         )
         ssl_obj = writer.get_extra_info("ssl_object")
-        cert = ssl_obj.getpeercert(binary_form=False)
         cert_bin = ssl_obj.getpeercert(binary_form=True)
 
         tls_version = ssl_obj.version()
         cipher = ssl_obj.cipher()
 
-        subject = _parse_cert_field(cert.get("subject", ())) if cert else ""
-        issuer = _parse_cert_field(cert.get("issuer", ())) if cert else ""
-        not_before = cert.get("notBefore", "") if cert else ""
-        not_after = cert.get("notAfter", "") if cert else ""
-        san = []
-        if cert:
-            for t, v in cert.get("subjectAltName", ()):
-                san.append(v)
-
-        sni_match = sni in san or sni == subject
-
         writer.close()
         await writer.wait_closed()
+
+        parsed = _parse_der_cert(cert_bin) if cert_bin else {}
+        subject = parsed.get("subject", "")
+        issuer = parsed.get("issuer", "")
+        san = parsed.get("san", [])
+        sni_match = sni in san or sni in subject
 
         return {
             "available": True,
             "subject": subject,
             "issuer": issuer,
-            "not_before": not_before,
-            "not_after": not_after,
-            "san": san[:5],
+            "not_before": parsed.get("not_before", ""),
+            "not_after": parsed.get("not_after", ""),
+            "san": san,
             "sni_match": sni_match,
             "tls_version": tls_version,
             "cipher_suite": cipher[0] if cipher else "",
