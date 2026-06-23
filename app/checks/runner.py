@@ -123,7 +123,7 @@ async def _execute_multi(task_id: str):
                 fut = await agent_manager.submit_task(remote_task, agent_id=aid)
                 if fut is None:
                     return label, {"error": "Agent offline"}
-                result = await asyncio.wait_for(fut, timeout=180)
+                result = await asyncio.wait_for(fut, timeout=300)
                 return label, result
             except asyncio.TimeoutError:
                 return label, {"error": "Agent timeout"}
@@ -343,7 +343,7 @@ async def _execute_remote(task_id: str, agent_id: str):
             _notify(task_id)
             return
 
-        result = await asyncio.wait_for(fut, timeout=180)
+        result = await asyncio.wait_for(fut, timeout=300)
         if result is None:
             task["status"] = "failed"
             task["error"] = "Agent disconnected during check"
