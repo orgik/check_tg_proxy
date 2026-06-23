@@ -390,6 +390,77 @@ h1 {
     max-width: 280px;
 }
 
+.agent-select {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.agent-checkboxes {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.agent-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+.agent-chip:has(input:checked) {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: rgba(59,130,246,0.1);
+}
+
+.agent-chip input { display: none; }
+
+.result-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.result-tab {
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.result-tab.active {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: rgba(59,130,246,0.15);
+}
+
+.result-tab .tab-status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.3rem;
+}
+
+.result-tab .tab-status.healthy { background: var(--success); }
+.result-tab .tab-status.degraded { background: var(--warning); }
+.result-tab .tab-status.unhealthy { background: var(--danger); }
+
 .share-btn {
     display: flex;
     align-items: center;

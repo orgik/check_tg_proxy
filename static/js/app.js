@@ -60,6 +60,8 @@ const LANGS = {
         share_btn: 'Поделиться',
         share_copied: 'Скопировано!',
         safe_mode: 'Безопасный режим (1 запрос/2 сек)',
+        check_from: 'Откуда:',
+        agent_local: 'Основной сервер',
         tip_safe_mode: 'Некоторые прокси используют SYN rate limiter (MTproxy-reanimation). В безопасном режиме все проверки идут с интервалом 1 сек между подключениями, чтобы не попасть под блокировку. Проверка займёт больше времени.',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Прокси отвечает',
@@ -138,6 +140,8 @@ const LANGS = {
         share_btn: 'Share',
         share_copied: 'Copied!',
         safe_mode: 'Safe mode (1 req/2 sec)',
+        check_from: 'From:',
+        agent_local: 'Main server',
         tip_safe_mode: 'Some proxies use SYN rate limiter (MTproxy-reanimation). Safe mode adds 1 second delay between all connections to avoid being blocked. Checks will take longer.',
         mtproto_label: 'MTProto',
         mtproto_ok: 'Proxy responds',
@@ -182,6 +186,8 @@ const statusText = document.getElementById('statusText');
 const errorMsg = document.getElementById('errorMsg');
 const resultsDiv = document.getElementById('results');
 
+let multiResultsData = {};
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const link = input.value.trim();
@@ -190,13 +196,23 @@ form.addEventListener('submit', async (e) => {
     statusBar.classList.remove('hidden'); spinner.classList.remove('hidden');
     statusText.textContent = t('submitting');
     errorMsg.classList.add('hidden'); resultsDiv.classList.add('hidden'); lastResults = null;
+    document.getElementById('multiResults').innerHTML = '';
+    multiResultsData = {};
+
     try {
         const safeMode = document.getElementById('safeMode').checked;
-        const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link, safe_mode: safeMode }) });
+        const selected = Array.from(document.querySelectorAll('.agent-chip input:checked')).map(el => el.value);
+        if (selected.length === 0) selected.push('');
+
+        const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link, safe_mode: safeMode, agent_ids: selected }) });
         if (!res.ok) { const data = await res.json(); throw new Error(data.detail || t('request_error')); }
         const { task_id } = await res.json();
         currentCheckId = task_id;
-        connectWebSocket(task_id);
+        if (selected.length === 1) {
+            connectWebSocket(task_id);
+        } else {
+            pollMultiTask(task_id, selected.length);
+        }
     } catch (err) { showError(err.message); btn.disabled = false; statusBar.classList.add('hidden'); }
 });
 
@@ -224,6 +240,76 @@ function fallbackPolling(taskId) {
             else if (data.status === 'failed') { clearInterval(iv); showError(data.error || t('check_failed')); btn.disabled = false; statusBar.classList.add('hidden'); }
         } catch (_) {}
     }, 2000);
+}
+
+function pollMultiTask(taskId, total) {
+    statusText.textContent = `${t('running')} (0/${total})`;
+    const iv = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/status/${taskId}`);
+            const data = await res.json();
+            const mr = data.multi_results || {};
+            const done = Object.keys(mr).length;
+            statusText.textContent = `${t('running')} (${done}/${total})`;
+
+            if (done > 0) {
+                multiResultsData = mr;
+                renderMultiTabs();
+            }
+
+            if (data.status === 'completed' || data.status === 'failed') {
+                clearInterval(iv);
+                spinner.classList.add('hidden');
+                statusBar.classList.add('hidden');
+                btn.disabled = false;
+                multiResultsData = mr;
+                renderMultiTabs();
+                if (currentCheckId) history.replaceState(null, '', '/result/' + currentCheckId);
+            }
+        } catch (_) {}
+    }, 3000);
+}
+
+function renderMultiTabs() {
+    const container = document.getElementById('multiResults');
+    const labels = Object.keys(multiResultsData);
+    if (labels.length === 0) return;
+
+    const activeLabel = container.querySelector('.result-tab.active')?.dataset?.label || labels[0];
+
+    let tabs = '<div class="result-tabs">';
+    labels.forEach(label => {
+        const r = multiResultsData[label];
+        const status = r.error ? 'unhealthy' : (r.overall_status || 'unhealthy');
+        const active = label === activeLabel ? ' active' : '';
+        tabs += `<div class="result-tab${active}" data-label="${esc(label)}" onclick="switchMultiTab(this)"><span class="tab-status ${status}"></span>${label === 'local' ? t('agent_local') : esc(label)}</div>`;
+    });
+    tabs += '</div>';
+    container.innerHTML = tabs;
+
+    const r = multiResultsData[activeLabel];
+    if (r && !r.error) {
+        resultsDiv.classList.remove('hidden');
+        errorMsg.classList.add('hidden');
+        lastResults = r;
+        renderResults(r);
+    }
+}
+
+function switchMultiTab(el) {
+    const label = el.dataset.label;
+    document.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const r = multiResultsData[label];
+    if (r && !r.error) {
+        resultsDiv.classList.remove('hidden');
+        errorMsg.classList.add('hidden');
+        lastResults = r;
+        renderResults(r);
+    } else {
+        resultsDiv.classList.add('hidden');
+        showError(r?.error || 'Failed');
+    }
 }
 
 function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.remove('hidden'); spinner.classList.add('hidden'); }
@@ -490,6 +576,34 @@ document.getElementById('shareBtn').addEventListener('click', () => {
     });
 });
 
+(async function loadAgents() {
+    try {
+        const [agentsRes, serverRes] = await Promise.all([
+            fetch('/api/agent/online'),
+            fetch('/api/server-info'),
+        ]);
+        const agents = agentsRes.ok ? await agentsRes.json() : [];
+        const server = serverRes.ok ? await serverRes.json() : {};
+
+        if (agents.length === 0) return;
+
+        const wrap = document.getElementById('agentSelectWrap');
+        const box = document.getElementById('agentCheckboxes');
+        wrap.style.display = '';
+
+        const sCity = server.city || server.country || '';
+        const sIsp = server.isp ? ` (${server.isp})` : '';
+        const localLabel = sCity ? `${esc(sCity)}${esc(sIsp)}` : t('agent_local');
+
+        box.innerHTML = `<label class="agent-chip"><input type="checkbox" value="" checked>&#9733; ${localLabel}</label>` +
+            agents.map(a => {
+                const city = a.city || a.country || '?';
+                const isp = a.isp ? ` (${a.isp})` : '';
+                return `<label class="agent-chip"><input type="checkbox" value="${a.id}">${esc(city)}${esc(isp)}</label>`;
+            }).join('');
+    } catch (_) {}
+})();
+
 function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
         return navigator.clipboard.writeText(text);
@@ -513,10 +627,14 @@ function copyText(text) {
         const res = await fetch(`/api/result/${checkId}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.results) {
-            input.value = data.proxy_link || '';
-            currentCheckId = checkId;
-            renderResults(data.results);
+        input.value = data.proxy_link || '';
+        currentCheckId = checkId;
+        const r = data.results;
+        if (r && r.multi_results) {
+            multiResultsData = r.multi_results;
+            renderMultiTabs();
+        } else if (r) {
+            renderResults(r);
         }
     } catch (_) {}
 })();

@@ -5,6 +5,8 @@ from typing import Optional
 class CheckRequest(BaseModel):
     proxy_link: str
     safe_mode: bool = False
+    agent_id: str = ""
+    agent_ids: list[str] = []
 
 
 class CheckResponse(BaseModel):

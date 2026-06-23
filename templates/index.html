@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TG Proxy Checker</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=10">
+    <link rel="stylesheet" href="/static/css/style.css?v=13">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -31,6 +31,10 @@
                     <span data-i18n="safe_mode"></span>
                     <span class="has-tooltip option-hint">?<span class="tooltip" data-i18n="tip_safe_mode"></span></span>
                 </label>
+                <div class="agent-select" id="agentSelectWrap" style="display:none">
+                    <span data-i18n="check_from" style="font-size:0.85rem;color:var(--text-secondary)"></span>
+                    <div class="agent-checkboxes" id="agentCheckboxes"></div>
+                </div>
             </div>
             <div id="statusBar" class="status-bar hidden">
                 <div class="spinner" id="spinner"></div>
@@ -38,6 +42,8 @@
             </div>
             <div id="errorMsg" class="error-msg hidden"></div>
         </div>
+
+        <div id="multiResults"></div>
 
         <div id="results" class="hidden">
             <div class="card">
@@ -119,6 +125,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=11"></script>
+    <script src="/static/js/app.js?v=16"></script>
 </body>
 </html>

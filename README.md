@@ -168,6 +168,52 @@ curl /api/status/{task_id}
 ws://host/ws/check/{task_id}
 ```
 
+## Распределённые агенты
+
+Проверки можно запускать не только с основного сервера, но и с удалённых агентов — VPS в разных странах или домашних ПК за NAT. Это позволяет проверить доступность прокси с разных IP и обойти блокировки датацентровых адресов.
+
+### Установка агента
+
+1. В админ-панели → "Агенты" → "Добавить агент" → укажите имя
+2. Скопируйте команду установки
+3. Вставьте на целевом сервере (нужен root):
+
+```bash
+curl -sL http://YOUR_SERVER/static/agent/install.sh | bash -s -- --master http://YOUR_SERVER --token ТОКЕН
+```
+
+Скрипт автоматически:
+- Установит Python если нет
+- Скачает агент с мастера
+- Создаст venv + зависимости
+- Создаст и запустит systemd-сервис `tg-agent`
+
+**Управление:**
+```bash
+systemctl status tg-agent    # статус
+journalctl -u tg-agent -f    # логи
+systemctl stop tg-agent      # остановить
+```
+
+**Удаление агента:**
+
+Кнопка "Удалить" в админке убирает агента только из базы мастера. Чтобы удалить с сервера, выполните на нём:
+```bash
+systemctl stop tg-agent
+systemctl disable tg-agent
+rm -rf /opt/tg-agent /etc/systemd/system/tg-agent.service
+systemctl daemon-reload
+```
+
+### Использование агентов
+
+После подключения агента:
+- На главной странице появится список "Откуда:" с онлайн-агентами
+- Выберите агент → нажмите "Проверить" → проверка выполнится с IP агента
+- В админке видны все агенты, их статус, IP, локация
+
+Агент поддерживает WebSocket (основной) и HTTP Polling (fallback) — выбирается автоматически.
+
 ## Структура проекта
 
 ```
@@ -177,17 +223,24 @@ ws://host/ws/check/{task_id}
 │   ├── database.py          # SQLite, CRUD
 │   ├── models.py            # Pydantic схемы
 │   ├── proxy_parser.py      # Парсер ссылок (hex + base64)
+│   ├── agent_manager.py     # Управление удалёнными агентами
 │   ├── checks/
 │   │   ├── tcp_tls_check.py     # TCP/TLS проверки
 │   │   ├── fingerprint_check.py # TLS-отпечатки (scapy)
+│   │   ├── mtproto_check.py     # MTProto handshake проверка
 │   │   ├── server_info.py       # GeoIP через ip-api.com
 │   │   ├── diagnostics.py       # Сертификат, стабильность, DPI, DNS
 │   │   └── runner.py            # Очередь, оркестрация
 │   ├── routers/
 │   │   ├── api.py           # POST /api/check, GET /api/status
 │   │   ├── admin.py         # Админ-панель API
-│   │   └── ws.py            # WebSocket
+│   │   ├── ws.py            # WebSocket для клиентов
+│   │   ├── agent_ws.py      # WebSocket для агентов
+│   │   └── agent_api.py     # HTTP API для агентов (polling + управление)
 │   └── client_hello/        # Бинарные ClientHello (Chrome, Firefox, Safari, curl)
+├── agent/
+│   ├── agent.py             # Скрипт агента (WebSocket + Polling)
+│   └── requirements.txt     # Зависимости агента
 ├── static/                  # CSS, JS
 ├── templates/               # HTML (index, admin)
 ├── deploy/                  # nginx, systemd, deploy script

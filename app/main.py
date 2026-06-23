@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from app import database
 from app.checks.fingerprint_check import load_client_hellos
 from app.checks.runner import cleanup_old_tasks
-from app.routers import api, admin, ws
+from app.routers import api, admin, ws, agent_ws, agent_api
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -37,7 +37,10 @@ app = FastAPI(title="Telegram Proxy Checker", lifespan=lifespan)
 app.include_router(api.router)
 app.include_router(admin.router)
 app.include_router(ws.router)
+app.include_router(agent_ws.router)
+app.include_router(agent_api.router)
 
+app.mount("/static/agent", StaticFiles(directory=str(BASE_DIR / "agent")), name="agent_files")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 

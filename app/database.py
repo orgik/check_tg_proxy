@@ -40,6 +40,22 @@ async def init_db():
         )
     """)
     await db.execute("CREATE INDEX IF NOT EXISTS idx_checks_created ON checks(created_at DESC)")
+
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS agents (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            agent_type TEXT NOT NULL DEFAULT 'datacenter',
+            ip TEXT DEFAULT '',
+            country TEXT DEFAULT '',
+            city TEXT DEFAULT '',
+            isp TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'offline',
+            last_seen TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     await db.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -133,6 +149,63 @@ async def get_stats() -> dict:
     )
     tcp_ok = (await cursor.fetchone())[0]
     return {"total": total, "completed": completed, "today": today, "tcp_ok": tcp_ok}
+
+
+async def save_agent(agent_id: str, name: str, token: str, agent_type: str = "datacenter"):
+    db = await get_db()
+    await db.execute(
+        "INSERT OR REPLACE INTO agents (id, name, token, agent_type) VALUES (?, ?, ?, ?)",
+        (agent_id, name, token, agent_type),
+    )
+    await db.commit()
+
+
+async def get_agent_by_token(token: str) -> dict | None:
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM agents WHERE token=?", (token,))
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def get_agent(agent_id: str) -> dict | None:
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM agents WHERE id=?", (agent_id,))
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def get_all_agents() -> list[dict]:
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM agents ORDER BY created_at DESC")
+    return [dict(r) for r in await cursor.fetchall()]
+
+
+async def update_agent_status(agent_id: str, status: str, ip: str = "", country: str = "",
+                               city: str = "", isp: str = ""):
+    db = await get_db()
+    fields = ["status=?", "last_seen=CURRENT_TIMESTAMP"]
+    params = [status]
+    if ip:
+        fields.append("ip=?")
+        params.append(ip)
+    if country:
+        fields.append("country=?")
+        params.append(country)
+    if city:
+        fields.append("city=?")
+        params.append(city)
+    if isp:
+        fields.append("isp=?")
+        params.append(isp)
+    params.append(agent_id)
+    await db.execute(f"UPDATE agents SET {', '.join(fields)} WHERE id=?", params)
+    await db.commit()
+
+
+async def delete_agent(agent_id: str):
+    db = await get_db()
+    await db.execute("DELETE FROM agents WHERE id=?", (agent_id,))
+    await db.commit()
 
 
 async def get_setting(key: str) -> str | None:

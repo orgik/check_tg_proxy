@@ -41,6 +41,21 @@ const LANGS = {
         pwd_short: 'Минимум 4 символа',
         pwd_error: 'Ошибка смены пароля',
         view_result: 'Открыть результат',
+        agents_title: 'Агенты',
+        agent_add: 'Добавить агент',
+        agent_name_ph: 'Имя агента',
+        agent_create: 'Создать',
+        agent_created: 'Агент создан! Команда установки (вставить на сервер):',
+        agent_col_name: 'Имя',
+        agent_col_type: 'Тип',
+        agent_col_location: 'Локация',
+        agent_col_status: 'Статус',
+        agent_online: 'Онлайн',
+        agent_offline: 'Оффлайн',
+        agent_delete: 'Удалить',
+        agent_none: 'Нет агентов',
+        copy_btn: 'Скопировать',
+        copy_done: 'Скопировано!',
     },
     en: {
         login_title: 'Admin Login',
@@ -84,6 +99,21 @@ const LANGS = {
         pwd_short: 'Minimum 4 characters',
         pwd_error: 'Failed to change password',
         view_result: 'View result',
+        agents_title: 'Agents',
+        agent_add: 'Add agent',
+        agent_name_ph: 'Agent name',
+        agent_create: 'Create',
+        agent_created: 'Agent created! Install command (paste on server):',
+        agent_col_name: 'Name',
+        agent_col_type: 'Type',
+        agent_col_location: 'Location',
+        agent_col_status: 'Status',
+        agent_online: 'Online',
+        agent_offline: 'Offline',
+        agent_delete: 'Delete',
+        agent_none: 'No agents',
+        copy_btn: 'Copy',
+        copy_done: 'Copied!',
     },
 };
 
@@ -168,7 +198,7 @@ document.getElementById('statusFilter').addEventListener('change', () => { curre
 async function showDashboard() {
     loginSection.classList.add('hidden');
     dashSection.classList.remove('hidden');
-    await Promise.all([loadStats(), loadChecks()]);
+    await Promise.all([loadStats(), loadChecks(), loadAgents()]);
 }
 
 async function apiFetch(url) {
@@ -288,6 +318,83 @@ function goPage(p) {
     loadChecks();
 }
 
+// === AGENTS ===
+document.getElementById('addAgentToggle').addEventListener('click', () => {
+    document.getElementById('addAgentForm').classList.toggle('hidden');
+    document.getElementById('agentToken').classList.add('hidden');
+});
+
+document.getElementById('agentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('agentName').value.trim();
+    if (!name) return;
+    try {
+        const res = await fetch('/api/agent/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('agentTokenValue').textContent =
+                `curl -sL ${location.origin}/static/agent/install.sh | bash -s -- --master ${location.origin} --token ${data.token}`;
+            document.getElementById('agentToken').classList.remove('hidden');
+            document.getElementById('agentName').value = '';
+            loadAgents();
+        }
+    } catch (_) {}
+});
+
+async function loadAgents() {
+    try {
+        const data = await apiFetch('/api/agent/list');
+        const body = document.getElementById('agentsBody');
+        if (!data || data.length === 0) {
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:1rem">${t('agent_none')}</td></tr>`;
+            return;
+        }
+        body.innerHTML = data.map(a => {
+            const statusColor = a.online ? 'var(--success)' : 'var(--text-secondary)';
+            const statusText = a.online ? t('agent_online') : t('agent_offline');
+            const loc = [a.city, a.country].filter(Boolean).join(', ') || '—';
+            return `<tr>
+                <td>${esc(a.name)}</td>
+                <td><code>${esc(a.ip || '—')}</code></td>
+                <td>${esc(loc)}</td>
+                <td style="color:${statusColor}">${statusText}</td>
+                <td style="white-space:nowrap">
+                    <button onclick="showToken('${a.id}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem">Token</button>
+                    <button onclick="deleteAgent('${a.id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.8rem;margin-left:0.3rem">${t('agent_delete')}</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (_) {}
+}
+
+async function showToken(id) {
+    try {
+        const res = await fetch('/api/agent/token/' + id, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const el = document.getElementById('agentToken');
+        document.getElementById('agentTokenValue').textContent =
+            `curl -sL ${location.origin}/static/agent/install.sh | bash -s -- --master ${location.origin} --token ${data.token}`;
+        el.classList.remove('hidden');
+        document.getElementById('addAgentForm').classList.remove('hidden');
+    } catch (_) {}
+}
+
+async function deleteAgent(id) {
+    try {
+        await fetch('/api/agent/remove/' + id, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token },
+        });
+        loadAgents();
+    } catch (_) {}
+}
+
+// === PASSWORD ===
 document.getElementById('pwdToggle').addEventListener('click', () => {
     const wrap = document.getElementById('pwdFormWrap');
     wrap.classList.toggle('hidden');
@@ -330,6 +437,18 @@ document.getElementById('pwdForm').addEventListener('submit', async (e) => {
     }
     msg.classList.remove('hidden');
 });
+
+function copyAgentCmd() {
+    const text = document.getElementById('agentTokenValue').textContent;
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = document.getElementById('copyTokenBtn');
+    btn.textContent = t('copy_done');
+    btn.style.color = 'var(--success)'; btn.style.borderColor = 'var(--success)';
+    setTimeout(() => { btn.textContent = t('copy_btn'); btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+}
 
 function esc(s) {
     if (!s) return '';

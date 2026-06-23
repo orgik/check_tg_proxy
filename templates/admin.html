@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - TG Proxy Checker</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=9">
+    <link rel="stylesheet" href="/static/css/style.css?v=11">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         .login-card { max-width: 400px; margin: 4rem auto; }
@@ -216,19 +216,47 @@
             <div class="admin-header">
                 <a href="/" class="back-link" data-i18n="back_link"></a>
                 <h1 data-i18n="admin_title"></h1>
+                <button class="logout-btn" id="pwdToggle" data-i18n="pwd_change"></button>
                 <button class="logout-btn" id="logoutBtn" data-i18n="logout_btn"></button>
             </div>
 
-            <div class="pwd-section">
-                <button class="pwd-toggle" id="pwdToggle" data-i18n="pwd_change"></button>
-                <div id="pwdFormWrap" class="hidden">
-                    <form class="pwd-form" id="pwdForm">
-                        <input type="password" id="pwdCurrent" data-i18n-placeholder="pwd_current">
-                        <input type="password" id="pwdNew" data-i18n-placeholder="pwd_new">
-                        <button type="submit" class="btn-sm" data-i18n="pwd_save"></button>
-                    </form>
-                    <div id="pwdMsg" class="pwd-msg hidden"></div>
+            <div id="pwdFormWrap" class="hidden" style="margin-bottom:1rem">
+                <form class="pwd-form" id="pwdForm">
+                    <input type="password" id="pwdCurrent" data-i18n-placeholder="pwd_current">
+                    <input type="password" id="pwdNew" data-i18n-placeholder="pwd_new">
+                    <button type="submit" class="btn-sm" data-i18n="pwd_save"></button>
+                </form>
+                <div id="pwdMsg" class="pwd-msg hidden"></div>
+            </div>
+
+            <div class="card" style="margin-bottom:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h2 style="font-size:1.1rem;margin:0" data-i18n="agents_title"></h2>
+                    <button class="pwd-toggle" id="addAgentToggle" data-i18n="agent_add"></button>
                 </div>
+                <div id="addAgentForm" class="hidden">
+                    <form class="pwd-form" id="agentForm" style="margin-bottom:0.75rem">
+                        <input type="text" id="agentName" data-i18n-placeholder="agent_name_ph" style="width:180px">
+                        <button type="submit" class="btn-sm" data-i18n="agent_create"></button>
+                    </form>
+                    <div id="agentToken" class="hidden" style="background:var(--bg-primary);border-radius:6px;padding:0.75rem;font-size:0.8rem;margin-top:0.5rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                            <span style="color:var(--success)" data-i18n="agent_created"></span>
+                            <button onclick="copyAgentCmd()" id="copyTokenBtn" style="background:var(--bg-input);border:1px solid var(--border);color:var(--text-secondary);border-radius:4px;padding:0.2rem 0.6rem;font-size:0.75rem;cursor:pointer" data-i18n="copy_btn"></button>
+                        </div>
+                        <code id="agentTokenValue" style="word-break:break-all"></code>
+                    </div>
+                </div>
+                <table class="checks-table" id="agentsTable">
+                    <thead><tr>
+                        <th data-i18n="agent_col_name"></th>
+                        <th>IP</th>
+                        <th data-i18n="agent_col_location"></th>
+                        <th data-i18n="agent_col_status"></th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="agentsBody"></tbody>
+                </table>
             </div>
 
             <div class="stats-grid" id="statsGrid">
@@ -271,6 +299,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=9"></script>
+    <script src="/static/js/admin.js?v=12"></script>
 </body>
 </html>
