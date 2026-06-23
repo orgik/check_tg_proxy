@@ -100,15 +100,19 @@ async def _execute_multi(task_id: str):
     agent_ids = task.get("agent_ids", [])
     safe_mode = task.get("safe_mode", False)
 
+    async def _run_local(label: str):
+        try:
+            result = await _run_checks_local(
+                task["server"], task["port"], task["sni"],
+                task.get("secret_hex", ""), task.get("proxy_mode", "unknown"), safe_mode
+            )
+            return label, result
+        except Exception as e:
+            return label, {"error": str(e)}
+
     async def _run_one(aid: str, label: str):
         if aid == "":
-            sub_id, _ = await submit_check(task["proxy_link"], "", safe_mode=safe_mode, agent_id="")
-            for _ in range(300):
-                await asyncio.sleep(1)
-                sub = get_task(sub_id)
-                if sub and sub["status"] in ("completed", "failed"):
-                    return label, sub.get("results")
-            return label, None
+            return await _run_local(label)
         else:
             remote_task = {
                 "task_id": f"{task_id}_{aid}",
@@ -165,6 +169,61 @@ async def _execute_multi(task_id: str):
     _notify(task_id)
 
 
+async def _run_checks_local(server, port, sni, secret_hex, proxy_mode, safe_mode):
+    delay = 2.0 if safe_mode else 0
+
+    async def _safe_delay():
+        if delay:
+            await asyncio.sleep(delay)
+
+    if safe_mode:
+        server_info, checker_info, dns_check = await asyncio.gather(
+            get_server_info(server, port), get_checker_info(), check_dns(server))
+        tcp_result = await check_tcp(server, port)
+        await _safe_delay()
+        mtproto_result = None
+        if secret_hex:
+            mtproto_result = await check_mtproto(server, port, secret_hex)
+            await _safe_delay()
+        tls_result = await check_tls(server, port, sni)
+        await _safe_delay()
+        tls_cert = await check_tls_certificate(server, port, sni)
+        await _safe_delay()
+        fingerprint_results = await run_all_fingerprint_checks(server, port, sni, delay=delay)
+        stability = await check_stability(server, port, delay=delay)
+        dpi = await check_dpi(server, port, sni, delay=delay)
+    else:
+        tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
+            check_tcp(server, port), get_server_info(server, port),
+            get_checker_info(), check_dns(server))
+        mtproto_result = None
+        if secret_hex:
+            mtproto_result = await check_mtproto(server, port, secret_hex)
+        tls_result, fingerprint_results = await asyncio.gather(
+            check_tls(server, port, sni), run_all_fingerprint_checks(server, port, sni))
+        tls_cert, stability, dpi = await asyncio.gather(
+            check_tls_certificate(server, port, sni),
+            check_stability(server, port), check_dpi(server, port, sni))
+
+    fp_pass = sum(1 for f in fingerprint_results if f["success"])
+    fp_total = len(fingerprint_results)
+    if mtproto_result and mtproto_result.get("success"):
+        overall = "healthy" if (fp_total == 0 or fp_pass == fp_total) else "degraded"
+    elif tcp_result["success"] and (tls_result.get("success") is True or tls_result.get("success") is None):
+        overall = "healthy" if (fp_total == 0 or fp_pass == fp_total) else "degraded"
+    else:
+        overall = "unhealthy"
+
+    return {
+        "server": server, "port": port, "sni": sni, "proxy_mode": proxy_mode,
+        "tcp": tcp_result, "tls": tls_result, "mtproto": mtproto_result,
+        "fingerprints": fingerprint_results, "server_info": server_info,
+        "checker_info": checker_info, "tls_cert": tls_cert,
+        "stability": stability, "dpi": dpi, "dns": dns_check,
+        "overall_status": overall,
+    }
+
+
 async def submit_check(proxy_link: str, ip_address: str = "", safe_mode: bool = False,
                        agent_id: str = "") -> tuple[str, dict]:
     server, port, sni, secret_hex, proxy_mode = parse_proxy_link(proxy_link)
@@ -209,103 +268,20 @@ async def _execute(task_id: str):
         task["status"] = "running"
         _notify(task_id)
 
-        server = task["server"]
-        port = task["port"]
-        sni = task["sni"]
-        secret_hex = task.get("secret_hex", "")
-        proxy_mode = task.get("proxy_mode", "unknown")
-
-        safe = task.get("safe_mode", False)
-        delay = 2.0 if safe else 0
-
-        async def _safe_delay():
-            if delay:
-                await asyncio.sleep(delay)
-
         try:
-            if safe:
-                server_info, checker_info, dns_check = await asyncio.gather(
-                    get_server_info(server, port),
-                    get_checker_info(),
-                    check_dns(server),
-                )
-                tcp_result = await check_tcp(server, port)
-                await _safe_delay()
-                mtproto_result = None
-                if secret_hex:
-                    mtproto_result = await check_mtproto(server, port, secret_hex)
-                    await _safe_delay()
-                tls_result = await check_tls(server, port, sni)
-                await _safe_delay()
-                tls_cert = await check_tls_certificate(server, port, sni)
-                await _safe_delay()
-                fingerprint_results = await run_all_fingerprint_checks(server, port, sni, delay=delay)
-                stability = await check_stability(server, port, delay=delay)
-                dpi = await check_dpi(server, port, sni, delay=delay)
-            else:
-                tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
-                    check_tcp(server, port),
-                    get_server_info(server, port),
-                    get_checker_info(),
-                    check_dns(server),
-                )
-                mtproto_result = None
-                if secret_hex:
-                    mtproto_result = await check_mtproto(server, port, secret_hex)
-                tls_result, fingerprint_results = await asyncio.gather(
-                    check_tls(server, port, sni),
-                    run_all_fingerprint_checks(server, port, sni),
-                )
-                tls_cert, stability, dpi = await asyncio.gather(
-                    check_tls_certificate(server, port, sni),
-                    check_stability(server, port),
-                    check_dpi(server, port, sni),
-                )
-
-            fp_pass = sum(1 for f in fingerprint_results if f["success"])
-            fp_total = len(fingerprint_results)
-
-            if mtproto_result and mtproto_result.get("success"):
-                if fp_total == 0 or fp_pass == fp_total:
-                    overall = "healthy"
-                elif fp_pass > 0:
-                    overall = "degraded"
-                else:
-                    overall = "degraded"
-            elif tcp_result["success"] and (tls_result.get("success") is True or tls_result.get("success") is None):
-                if fp_total == 0 or fp_pass == fp_total:
-                    overall = "healthy"
-                else:
-                    overall = "degraded"
-            else:
-                overall = "unhealthy"
-
-            results = {
-                "server": server,
-                "port": port,
-                "sni": sni,
-                "proxy_mode": proxy_mode,
-                "tcp": tcp_result,
-                "tls": tls_result,
-                "mtproto": mtproto_result,
-                "fingerprints": fingerprint_results,
-                "server_info": server_info,
-                "checker_info": checker_info,
-                "tls_cert": tls_cert,
-                "stability": stability,
-                "dpi": dpi,
-                "dns": dns_check,
-                "overall_status": overall,
-            }
-
+            results = await _run_checks_local(
+                task["server"], task["port"], task["sni"],
+                task.get("secret_hex", ""), task.get("proxy_mode", "unknown"),
+                task.get("safe_mode", False),
+            )
             task["status"] = "completed"
             task["results"] = results
             await database.update_check_result(
                 task_id, "completed",
-                tcp_result=tcp_result,
-                tls_result=tls_result,
-                fingerprint_results=fingerprint_results,
-                server_info=server_info,
+                tcp_result=results.get("tcp"),
+                tls_result=results.get("tls"),
+                fingerprint_results=results.get("fingerprints"),
+                server_info=results.get("server_info"),
                 full_results=results,
             )
         except Exception as e:

@@ -254,7 +254,7 @@ function renderChecks(checks, total, pages) {
         const tlsIcon = tlsOk === true ? '<span style="color:var(--success)">OK</span>' : tlsOk === false ? `<span style="color:var(--danger)">${t('error_label')}</span>` : '—';
         const statusKey = 'status_' + c.status;
         const statusColor = c.status === 'completed' ? 'var(--success)' : c.status === 'failed' ? 'var(--danger)' : 'var(--warning)';
-        return `<tr class="check-row" data-id="${c.id}" style="cursor:pointer">
+        return `<tr class="check-row" data-id="${c.id}">
             <td>${time}</td>
             <td title="${esc(c.proxy_link)}">${esc(c.proxy_link)}</td>
             <td>${esc(c.server)}:${c.port}</td>
@@ -266,9 +266,6 @@ function renderChecks(checks, total, pages) {
         </tr>`;
     }).join('');
 
-    body.querySelectorAll('.check-row').forEach(row => {
-        row.addEventListener('click', () => toggleDetail(row, checks));
-    });
 
     const pageText = t('page_of').replace('{page}', currentPage).replace('{pages}', pages);
     const pag = document.getElementById('pagination');
