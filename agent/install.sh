@@ -19,7 +19,7 @@ INSTALL_DIR="/opt/tg-agent"
 # ── UPDATE MODE ──────────────────────────────
 if [ "$ACTION" = "update" ]; then
     if [ -z "$MASTER" ]; then
-        MASTER=$(grep -oP '(?<=--master )\S+' /etc/systemd/system/tg-agent.service 2>/dev/null || true)
+        MASTER=$(sed -n 's/.*--master \([^ ]*\).*/\1/p' /etc/systemd/system/tg-agent.service 2>/dev/null)
     fi
     if [ -z "$MASTER" ]; then
         echo "Usage: bash install.sh update --master http://SERVER"
@@ -27,16 +27,30 @@ if [ "$ACTION" = "update" ]; then
     fi
 
     echo "=== Updating agent from $MASTER ==="
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo "ERROR: $INSTALL_DIR not found. Run full install first."
+        exit 1
+    fi
+
     curl -sL "$MASTER/static/agent/agent.py" -o "$INSTALL_DIR/agent.py"
+    echo "Downloaded agent.py"
 
     mkdir -p "$INSTALL_DIR/client_hello"
     for name in chrome_148_0_7778_179 curl linux_firefox_140_11_0esr safari_26_5_11_4; do
         curl -sL "$MASTER/static/agent/client_hello/$name" -o "$INSTALL_DIR/client_hello/$name" 2>/dev/null || true
     done
+    echo "Downloaded client_hello files"
 
-    systemctl restart tg-agent
-    echo "Updated and restarted. Status:"
-    systemctl status tg-agent --no-pager -l || true
+    if systemctl is-active tg-agent >/dev/null 2>&1; then
+        systemctl restart tg-agent
+        echo "Restarted tg-agent. Status:"
+        systemctl status tg-agent --no-pager -l || true
+    else
+        echo "WARNING: tg-agent service not found or not running."
+        echo "Files updated in $INSTALL_DIR but service not restarted."
+        echo "Run full install if this is a new agent."
+    fi
     exit 0
 fi
 

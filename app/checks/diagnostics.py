@@ -152,26 +152,52 @@ async def check_stability(host: str, port: int, count: int = 10, delay: float = 
     }
 
 
+SNI_PROFILES = [
+    ("correct", None),
+    ("cdn", "www.google.com"),
+    ("nonexistent", "rand-check-8372.invalid"),
+    ("empty", ""),
+]
+
+
 async def check_dpi(host: str, port: int, sni: str, delay: float = 0) -> dict:
     result = {}
 
     if sni:
-        wrong_sni = await _try_tls_connect(host, port, "decoy-" + sni[:20] + ".example.com")
-        if delay:
-            await asyncio.sleep(delay)
-        correct_sni = await _try_tls_connect(host, port, sni)
-        if delay:
-            await asyncio.sleep(delay)
-        result["wrong_sni"] = wrong_sni
-        result["correct_sni"] = correct_sni
-        if wrong_sni["ok"] and correct_sni["ok"]:
-            result["sni_filtering"] = False
-        elif not correct_sni["ok"] and not wrong_sni["ok"]:
-            result["sni_filtering"] = None
-        else:
-            result["sni_filtering"] = True
+        sni_results = {}
+        for profile_name, profile_sni in SNI_PROFILES:
+            test_sni = sni if profile_sni is None else profile_sni
+            if profile_name == "empty":
+                sni_results[profile_name] = await _try_tls_connect(host, port, "a")
+                sni_results[profile_name]["sni"] = "(empty-like)"
+            else:
+                sni_results[profile_name] = await _try_tls_connect(host, port, test_sni)
+                sni_results[profile_name]["sni"] = test_sni
+            if delay:
+                await asyncio.sleep(delay)
 
-    http_result = await _http_probe(host, port)
+        result["sni_profiles"] = sni_results
+
+        correct_ok = sni_results["correct"]["ok"]
+        cdn_ok = sni_results["cdn"]["ok"]
+        nonexist_ok = sni_results["nonexistent"]["ok"]
+
+        if correct_ok and cdn_ok and nonexist_ok:
+            result["sni_filtering"] = False
+        elif not correct_ok and cdn_ok:
+            result["sni_filtering"] = True
+        elif not correct_ok and not cdn_ok and not nonexist_ok:
+            result["sni_filtering"] = None
+        elif correct_ok and not cdn_ok:
+            result["sni_filtering"] = False
+        else:
+            result["sni_filtering"] = "partial"
+
+        # Backward compat
+        result["correct_sni"] = sni_results["correct"]
+        result["wrong_sni"] = sni_results["cdn"]
+
+    http_result = await _http_probe(host, port, sni)
     if delay:
         await asyncio.sleep(delay)
     result["http_probe"] = http_result
@@ -202,12 +228,13 @@ async def _try_tls_connect(host: str, port: int, sni: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-async def _http_probe(host: str, port: int) -> dict:
+async def _http_probe(host: str, port: int, sni: str = "") -> dict:
+    hostname = sni or host
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port), timeout=5
         )
-        writer.write(b"GET / HTTP/1.1\r\nHost: check\r\nConnection: close\r\n\r\n")
+        writer.write(f"GET / HTTP/1.1\r\nHost: {hostname}\r\nConnection: close\r\n\r\n".encode())
         await writer.drain()
         data = await asyncio.wait_for(reader.read(1024), timeout=5)
         writer.close()
@@ -222,30 +249,44 @@ async def _http_probe(host: str, port: int) -> dict:
 
 
 async def _check_rst(host: str, port: int) -> dict:
+    start = time.monotonic()
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port), timeout=5
         )
+        connect_ms = round((time.monotonic() - start) * 1000, 1)
+        send_time = time.monotonic()
         writer.write(b"\x16\x03\x01\x00\x05\x01\x00\x00\x01\x00")
         await writer.drain()
         try:
             data = await asyncio.wait_for(reader.read(64), timeout=3)
+            elapsed_ms = round((time.monotonic() - send_time) * 1000, 1)
             if not data:
-                return {"type": "connection_closed", "immediate": True}
-            return {"type": "response", "immediate": False}
+                return {"type": "connection_closed", "immediate": elapsed_ms < 50,
+                        "timing_ms": elapsed_ms, "phase": "after_clienthello"}
+            return {"type": "response", "immediate": False,
+                    "timing_ms": elapsed_ms, "phase": "after_clienthello"}
         except asyncio.TimeoutError:
-            return {"type": "no_response", "immediate": False}
+            return {"type": "no_response", "immediate": False,
+                    "timing_ms": 3000, "phase": "after_clienthello"}
         except ConnectionResetError:
-            return {"type": "rst", "immediate": True}
+            elapsed_ms = round((time.monotonic() - send_time) * 1000, 1)
+            phase = "during_clienthello" if elapsed_ms < 100 else "after_clienthello"
+            return {"type": "rst", "immediate": elapsed_ms < 50,
+                    "timing_ms": elapsed_ms, "phase": phase}
         finally:
             writer.close()
             await writer.wait_closed()
     except ConnectionResetError:
-        return {"type": "rst_on_connect", "immediate": True}
+        elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+        return {"type": "rst_on_connect", "immediate": True,
+                "timing_ms": elapsed_ms, "phase": "on_connect"}
     except asyncio.TimeoutError:
-        return {"type": "connect_timeout", "immediate": False}
+        return {"type": "connect_timeout", "immediate": False,
+                "timing_ms": 5000, "phase": "on_connect"}
     except Exception as e:
-        return {"type": "error", "immediate": False, "error": str(e)}
+        return {"type": "error", "immediate": False,
+                "timing_ms": 0, "phase": "unknown", "error": str(e)}
 
 
 def _is_ip(host: str) -> bool:

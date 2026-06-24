@@ -40,12 +40,20 @@ const LANGS = {
         tip_stab_jitter: 'Разброс времени ответа. Высокий джиттер может указывать на throttling.',
         tip_stab_pattern: 'Анализ паттерна: стабильно, нестабильно, ограничение частоты или полная блокировка.',
         dpi_sni_filter: 'Фильтрация по SNI',
+        dpi_sni_profiles: 'SNI-профили',
         dpi_http_probe: 'HTTP-проба',
         dpi_rst: 'TCP RST',
-        tip_dpi_sni: 'Сравнение подключений с правильным и неправильным SNI. Если правильный блокируется, а неправильный — нет, провайдер фильтрует по SNI.',
-        tip_dpi_http: 'Отправка HTTP-запроса на порт прокси. Если сервер отвечает HTTP — он маскируется под веб-сервер.',
+        dpi_rst_timing: 'Время RST',
+        dpi_rst_phase: 'Фаза RST',
+        tip_dpi_sni: 'Подключения с разными SNI: правильный, CDN (google.com), несуществующий, пустой. Показывает, блокируется ли конкретный домен.',
+        tip_dpi_http: 'HTTP-запрос с Host: SNI на порт прокси. Если сервер отвечает HTTP — он маскируется под веб-сервер.',
         tip_dpi_rst: 'Отправка некорректного TLS-пакета. Если приходит TCP RST вместо закрытия — признак DPI-блокировки.',
+        tip_dpi_timing: 'Время до получения RST после отправки пакета. Быстрый RST (<50мс) — признак DPI.',
+        tip_dpi_phase: 'На какой фазе соединения приходит RST: при подключении, во время ClientHello или после.',
+        sni_correct: 'Правильный SNI', sni_cdn: 'CDN (google)', sni_nonexistent: 'Несуществующий', sni_empty: 'Пустой',
+        dpi_partial: 'Частичная',
         dpi_no: 'Нет', dpi_yes: 'Да', dpi_unknown: 'Неизвестно',
+        phase_on_connect: 'При подключении', phase_during_clienthello: 'Во время ClientHello', phase_after_clienthello: 'После ClientHello',
         dpi_http_yes: 'Отвечает HTTP', dpi_http_no: 'Не HTTP', dpi_no_response: 'Нет ответа',
         rst_none: 'Нет RST', rst_detected: 'RST обнаружен', rst_on_connect: 'RST при подключении',
         rst_closed: 'Соединение закрыто', rst_timeout: 'Таймаут',
@@ -152,12 +160,20 @@ const LANGS = {
         tip_stab_jitter: 'Response time spread. High jitter may indicate throttling.',
         tip_stab_pattern: 'Pattern analysis: stable, unstable, rate limited, or fully blocked.',
         dpi_sni_filter: 'SNI Filtering',
+        dpi_sni_profiles: 'SNI Profiles',
         dpi_http_probe: 'HTTP Probe',
         dpi_rst: 'TCP RST',
-        tip_dpi_sni: 'Compares connections with correct vs wrong SNI. If correct is blocked but wrong is not, the ISP filters by SNI.',
-        tip_dpi_http: 'Sends HTTP request to proxy port. If server responds with HTTP, it is disguised as a web server.',
+        dpi_rst_timing: 'RST Timing',
+        dpi_rst_phase: 'RST Phase',
+        tip_dpi_sni: 'Connections with different SNIs: correct, CDN (google.com), nonexistent, empty. Shows if a specific domain is blocked.',
+        tip_dpi_http: 'HTTP request with Host: SNI to the proxy port. If the server responds with HTTP, it is disguised as a web server.',
         tip_dpi_rst: 'Sends an invalid TLS packet. A TCP RST instead of close indicates DPI blocking.',
+        tip_dpi_timing: 'Time until RST received after sending packet. Fast RST (<50ms) indicates DPI.',
+        tip_dpi_phase: 'At which connection phase RST arrives: on connect, during ClientHello, or after.',
+        sni_correct: 'Correct SNI', sni_cdn: 'CDN (google)', sni_nonexistent: 'Nonexistent', sni_empty: 'Empty',
+        dpi_partial: 'Partial',
         dpi_no: 'No', dpi_yes: 'Yes', dpi_unknown: 'Unknown',
+        phase_on_connect: 'On connect', phase_during_clienthello: 'During ClientHello', phase_after_clienthello: 'After ClientHello',
         dpi_http_yes: 'Responds HTTP', dpi_http_no: 'Not HTTP', dpi_no_response: 'No response',
         rst_none: 'No RST', rst_detected: 'RST detected', rst_on_connect: 'RST on connect',
         rst_closed: 'Connection closed', rst_timeout: 'Timeout',
@@ -471,8 +487,23 @@ function renderDpi(r) {
         let val, color;
         if (d.sni_filtering === true) { val = t('dpi_yes'); color = 'var(--danger)'; }
         else if (d.sni_filtering === false) { val = t('dpi_no'); color = 'var(--success)'; }
+        else if (d.sni_filtering === 'partial') { val = t('dpi_partial'); color = 'var(--warning)'; }
         else { val = t('dpi_unknown'); color = 'var(--text-secondary)'; }
         rows.push(tip('dpi_sni_filter', 'tip_dpi_sni', `<span style="color:${color}">${val}</span>`));
+    }
+
+    if (d.sni_profiles) {
+        const profiles = d.sni_profiles;
+        const keys = [['correct', 'sni_correct'], ['cdn', 'sni_cdn'], ['nonexistent', 'sni_nonexistent'], ['empty', 'sni_empty']];
+        let profileHtml = '';
+        for (const [key, labelKey] of keys) {
+            const p = profiles[key];
+            if (!p) continue;
+            const icon = p.ok ? '<span style="color:var(--success)">✓</span>' : '<span style="color:var(--danger)">✗</span>';
+            const rtt = p.ok && p.rtt_ms ? ` (${p.rtt_ms} ${t('ms')})` : '';
+            profileHtml += `<div class="info-row"><span class="info-label" style="font-size:0.85em">${t(labelKey)}</span><span class="info-value">${icon}${rtt}</span></div>`;
+        }
+        if (profileHtml) rows.push(profileHtml);
     }
 
     if (d.http_probe) {
@@ -492,6 +523,15 @@ function renderDpi(r) {
         else if (rst.type === 'no_response' || rst.type === 'connect_timeout') { val = t('rst_timeout'); }
         else { val = t('rst_none'); color = 'var(--success)'; }
         rows.push(tip('dpi_rst', 'tip_dpi_rst', `<span style="color:${color}">${val}</span>`));
+
+        if (rst.timing_ms !== undefined && (rst.type === 'rst' || rst.type === 'rst_on_connect' || rst.type === 'connection_closed')) {
+            const fast = rst.timing_ms < 50;
+            const timingColor = fast ? 'var(--danger)' : 'var(--text-secondary)';
+            rows.push(tip('dpi_rst_timing', 'tip_dpi_timing', `<span style="color:${timingColor}">${rst.timing_ms} ${t('ms')}${fast ? ' ⚡' : ''}</span>`));
+        }
+        if (rst.phase && rst.phase !== 'unknown') {
+            rows.push(tip('dpi_rst_phase', 'tip_dpi_phase', t('phase_' + rst.phase)));
+        }
     }
 
     el.innerHTML = rows.join('');
