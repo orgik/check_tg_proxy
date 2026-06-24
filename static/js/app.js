@@ -64,6 +64,9 @@ const LANGS = {
         tip_dns_cloudflare: 'Резолв через Cloudflare (1.1.1.1). Считается незаблокированным.',
         tip_dns_consistent: 'Все DNS возвращают одинаковый IP? Если нет — возможна подмена DNS.',
         dns_ok: 'Совпадают', dns_mismatch: 'Расхождение',
+        dns_err_timeout: 'Таймаут', dns_err_nxdomain: 'Домен не существует',
+        dns_err_servfail: 'Ошибка сервера', dns_err_refused: 'Запрос отклонён',
+        dns_err_network_error: 'Сеть недоступна',
         dns_direct_ip: '(прямой IP, DNS не требуется)',
         share_btn: 'Поделиться',
         share_copied: 'Скопировано!',
@@ -184,6 +187,9 @@ const LANGS = {
         tip_dns_cloudflare: 'Resolution via Cloudflare (1.1.1.1). Considered unblocked.',
         tip_dns_consistent: 'Do all DNS return the same IP? If not, DNS spoofing is possible.',
         dns_ok: 'Consistent', dns_mismatch: 'Mismatch',
+        dns_err_timeout: 'Timeout', dns_err_nxdomain: 'Domain not found',
+        dns_err_servfail: 'Server failure', dns_err_refused: 'Query refused',
+        dns_err_network_error: 'Network error',
         dns_direct_ip: '(direct IP, no DNS needed)',
         share_btn: 'Share',
         share_copied: 'Copied!',
@@ -614,9 +620,15 @@ function renderDns(r) {
         const entry = d[key];
         if (!entry) continue;
         const labelKey = 'dns_' + key;
-        const ips = entry.ips?.join(', ') || entry.error || '—';
+        let detail;
+        if (entry.ok) {
+            detail = entry.ips?.join(', ') || '—';
+        } else {
+            const errKey = 'dns_err_' + (entry.error || '');
+            detail = t(errKey) !== errKey ? t(errKey) : esc(entry.error || '—');
+        }
         const okIcon = entry.ok ? '<span style="color:var(--success)">✓</span> ' : '<span style="color:var(--danger)">✗</span> ';
-        rows.push(tip(labelKey, tipKey, okIcon + `<code>${esc(ips)}</code>`));
+        rows.push(tip(labelKey, tipKey, okIcon + `<code>${esc(detail)}</code>`));
     }
     if (d.consistent !== undefined) {
         const val = d.consistent

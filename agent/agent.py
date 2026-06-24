@@ -183,6 +183,69 @@ async def check_stability(host, port, count=10, delay=0):
             "first_fail_at": first_fail, "details": results}
 
 
+def _classify_dns_error(e):
+    msg = str(e).lower()
+    if isinstance(e, asyncio.TimeoutError) or "timed out" in msg: return "timeout"
+    if "nxdomain" in msg or "name or service not known" in msg or "no address" in msg: return "nxdomain"
+    if "servfail" in msg or "server fail" in msg: return "servfail"
+    if "refused" in msg: return "refused"
+    if "unreachable" in msg or "network" in msg: return "network_error"
+    return str(e)
+
+
+def _skip_dns_name(data, offset):
+    while offset < len(data):
+        length = data[offset]
+        if length == 0: return offset + 1
+        if (length & 0xC0) == 0xC0: return offset + 2
+        offset += 1 + length
+    return offset
+
+
+def _resolve_via(host, dns_server):
+    qname = b""
+    for part in host.encode().split(b"."):
+        qname += bytes([len(part)]) + part
+    qname += b"\x00"
+    tx_id = struct.pack("!H", 0x1234)
+    header = tx_id + b"\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+    question = qname + struct.pack("!HH", 1, 1)
+    packet = header + question
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(3)
+    try:
+        sock.sendto(packet, (dns_server, 53))
+        data, _ = sock.recvfrom(512)
+        flags = struct.unpack("!H", data[2:4])[0]
+        rcode = flags & 0x0F
+        if rcode == 3: return {"error": "nxdomain"}
+        if rcode == 2: return {"error": "servfail"}
+        if rcode == 5: return {"error": "refused"}
+        if rcode != 0: return {"error": f"dns_error_{rcode}"}
+        ancount = struct.unpack("!H", data[6:8])[0]
+        if ancount == 0: return None
+        offset = 12
+        offset = _skip_dns_name(data, offset)
+        offset += 4
+        ips = []
+        for _ in range(ancount):
+            if offset >= len(data): break
+            offset = _skip_dns_name(data, offset)
+            if offset + 10 > len(data): break
+            rtype, rclass, ttl, rdlen = struct.unpack("!HHIH", data[offset:offset + 10])
+            offset += 10
+            if rtype == 1 and rdlen == 4 and offset + 4 <= len(data):
+                ips.append(socket.inet_ntoa(data[offset:offset + 4]))
+            offset += rdlen
+        return ips if ips else None
+    except socket.timeout:
+        return {"error": "timeout"}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        sock.close()
+
+
 async def check_dns(host):
     if _is_ip(host):
         return {"direct_ip": True, "all_ips": [host], "consistent": True}
@@ -193,7 +256,21 @@ async def check_dns(host):
         ips = list(set(r[4][0] for r in res))
         results["system"] = {"ips": ips, "ok": True}
     except Exception as e:
-        results["system"] = {"ips": [], "ok": False, "error": str(e)}
+        results["system"] = {"ips": [], "ok": False, "error": _classify_dns_error(e)}
+    for name, dns_ip in [("google", "8.8.8.8"), ("cloudflare", "1.1.1.1")]:
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda d=dns_ip: _resolve_via(host, d)), timeout=5)
+            if isinstance(result, dict) and "error" in result:
+                results[name] = {"ips": [], "ok": False, "error": result["error"]}
+            elif result:
+                results[name] = {"ips": result if isinstance(result, list) else [result], "ok": True}
+            else:
+                results[name] = {"ips": [], "ok": False, "error": "nxdomain"}
+        except asyncio.TimeoutError:
+            results[name] = {"ips": [], "ok": False, "error": "timeout"}
+        except Exception as e:
+            results[name] = {"ips": [], "ok": False, "error": _classify_dns_error(e)}
     all_ips = set()
     for v in results.values():
         if isinstance(v, dict):
