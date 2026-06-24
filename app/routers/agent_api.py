@@ -134,5 +134,5 @@ async def online_agents():
     return [
         {"id": a["id"], "name": a["name"], "type": a["type"],
          "ip": a["ip"], "country": a["country"], "city": a["city"], "isp": a.get("isp", ""), "online": a["online"]}
-        for a in agents
+        for a in agents if a["online"]
     ]
