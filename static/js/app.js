@@ -96,6 +96,16 @@ const LANGS = {
         tip_rep_shodan: 'Открытые порты и известные уязвимости по данным Shodan.',
         tip_rep_rbl: 'Наличие IP в DNS-блоклистах. Попадание — признак спама или злоупотреблений.',
         tip_rep_risk: 'Общая оценка риска на основе всех источников.',
+        err_timeout: 'Таймаут',
+        err_connection_refused: 'Соединение отклонено',
+        err_connection_reset: 'Соединение сброшено',
+        err_network_unreachable: 'Сеть недоступна',
+        err_no_route: 'Нет маршрута',
+        err_dns_error: 'Ошибка DNS',
+        err_unexpected_eof: 'Неожиданный разрыв (EOF)',
+        err_handshake_failure: 'Ошибка TLS-рукопожатия',
+        err_certificate_error: 'Ошибка сертификата',
+        err_tls_alert: 'TLS alert',
         dc_warning_title: 'Сервер отклоняет подключения из дата-центра',
         dc_warning_text: 'Прокси-сервер отказывает в подключении с нашего IP ({ip}, {location}). Многие MTProto-прокси блокируют датацентровые IP для защиты от обнаружения. Прокси может быть доступен с вашего домашнего/мобильного IP.',
         dc_warning_title_timeout: 'Сервер не отвечает из нашего дата-центра',
@@ -176,6 +186,16 @@ const LANGS = {
         mode_simple: 'Simple',
         mode_unknown: 'Unknown',
         tip_mtproto: 'MTProto protocol check — sends an obfuscated init packet. If the proxy responds, it is working.',
+        err_timeout: 'Timeout',
+        err_connection_refused: 'Connection refused',
+        err_connection_reset: 'Connection reset',
+        err_network_unreachable: 'Network unreachable',
+        err_no_route: 'No route to host',
+        err_dns_error: 'DNS error',
+        err_unexpected_eof: 'Unexpected EOF',
+        err_handshake_failure: 'TLS handshake failure',
+        err_certificate_error: 'Certificate error',
+        err_tls_alert: 'TLS alert',
         ip_reputation_title: 'IP Reputation',
         rep_abuse_score: 'Abuse Score',
         rep_reports: 'reports',
@@ -580,16 +600,18 @@ function renderResults(r) {
         (r.sni ? `<span><span class="label-sm">SNI:</span> <span class="val">${esc(r.sni)}</span></span>` : '');
 
     const tcp = r.tcp;
+    const tcpErr = tcp.error_type ? (t('err_' + tcp.error_type) !== 'err_' + tcp.error_type ? t('err_' + tcp.error_type) : esc(tcp.error)) : esc(tcp.error);
     document.getElementById('tcpResult').innerHTML = tcp.success
         ? `<span class="ok">${t('connected')}</span><span class="rtt">${tcp.rtt_ms} ${t('ms')}</span>`
-        : `<span class="fail">${t('error')}</span><span class="rtt">${esc(tcp.error)}</span>`;
+        : `<span class="fail">${tcpErr}</span>`;
     const tls = r.tls;
+    const tlsErr = tls.error_type ? (t('err_' + tls.error_type) !== 'err_' + tls.error_type ? t('err_' + tls.error_type) : esc(tls.error)) : esc(tls.error);
     if (tls.success === null || tls.success === undefined)
         document.getElementById('tlsResult').innerHTML = `<span class="skip">${t('skipped')}</span><span class="rtt">${esc(tls.error)}</span>`;
     else if (tls.success)
         document.getElementById('tlsResult').innerHTML = `<span class="ok">OK</span><span class="rtt">${tls.rtt_ms} ${t('ms')}</span>`;
     else
-        document.getElementById('tlsResult').innerHTML = `<span class="fail">${t('error')}</span><span class="rtt">${esc(tls.error)}</span>`;
+        document.getElementById('tlsResult').innerHTML = `<span class="fail">${tlsErr}</span>`;
 
     const mtItem = document.getElementById('mtprotoItem');
     const mtResult = document.getElementById('mtprotoResult');
