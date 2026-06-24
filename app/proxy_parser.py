@@ -1,4 +1,5 @@
 import base64
+import re
 import urllib.parse
 
 
@@ -10,12 +11,59 @@ def _decode_secret(secret: str) -> bytes | None:
 
     padded = secret + "=" * (-len(secret) % 4)
     for alt in [secret, padded]:
-        for variant in [alt, alt.replace("-", "+").replace("_", "/")]:
+        urlsafe = alt.replace("-", "+").replace("_", "/")
+        for variant in [alt, urlsafe]:
             try:
-                return base64.b64decode(variant)
+                return base64.b64decode(variant, validate=True)
             except Exception:
                 continue
     return None
+
+
+def _validate_sni(sni: str) -> str:
+    if not sni:
+        return ""
+    sni = sni.strip().lower()
+    if not sni:
+        return ""
+    # No control characters
+    if any(ord(c) < 32 for c in sni):
+        return ""
+    # Must look like a hostname, not an IP
+    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', sni):
+        return ""
+    # Each label: 1-63 chars, alphanumeric + hyphens, no leading/trailing hyphen
+    labels = sni.split(".")
+    for label in labels:
+        if not label or len(label) > 63:
+            return ""
+        if not re.match(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$', label):
+            return ""
+    return sni
+
+
+def _detect_proxy_mode(secret_bytes: bytes) -> tuple[str, str]:
+    """Returns (proxy_mode, sni)."""
+    if not secret_bytes:
+        return "unknown", ""
+
+    tag = secret_bytes[0]
+
+    if tag == 0xEE and len(secret_bytes) > 17:
+        raw_sni = secret_bytes[17:].decode("utf-8", errors="replace")
+        sni = _validate_sni(raw_sni)
+        return "fake_tls", sni
+
+    if tag == 0xDD and len(secret_bytes) == 17:
+        return "padded", ""
+
+    if len(secret_bytes) == 16:
+        return "simple", ""
+
+    if tag == 0xDD:
+        return "padded", ""
+
+    return "unknown", ""
 
 
 def parse_proxy_link(url: str) -> tuple[str, int, str, str, str]:
@@ -53,14 +101,6 @@ def parse_proxy_link(url: str) -> tuple[str, int, str, str, str]:
         b = _decode_secret(secret)
         if b:
             secret_hex = b.hex()
-            if b[0] == 0xEE and len(b) > 17:
-                proxy_mode = "fake_tls"
-                sni = b[17:].decode("utf-8", errors="replace")
-            elif b[0] == 0xDD:
-                proxy_mode = "padded"
-            elif len(b) == 16:
-                proxy_mode = "simple"
-            else:
-                proxy_mode = "unknown"
+            proxy_mode, sni = _detect_proxy_mode(b)
 
     return server, port, sni, secret_hex, proxy_mode
