@@ -8,6 +8,7 @@ from app.checks.fingerprint_check import run_all_fingerprint_checks
 from app.checks.server_info import get_server_info, get_checker_info
 from app.checks.diagnostics import check_tls_certificate, check_stability, check_dpi, check_dns
 from app.checks.mtproto_check import check_mtproto
+from app.checks.ip_reputation import check_ip_reputation
 from app.proxy_parser import parse_proxy_link
 from app import database
 from app.agent_manager import manager as agent_manager
@@ -179,6 +180,7 @@ async def _run_checks_local(server, port, sni, secret_hex, proxy_mode, safe_mode
     if safe_mode:
         server_info, checker_info, dns_check = await asyncio.gather(
             get_server_info(server, port), get_checker_info(), check_dns(server))
+        resolved_ip = server_info.get("ip") if isinstance(server_info, dict) else None
         tcp_result = await check_tcp(server, port)
         await _safe_delay()
         mtproto_result = None
@@ -192,15 +194,19 @@ async def _run_checks_local(server, port, sni, secret_hex, proxy_mode, safe_mode
         fingerprint_results = await run_all_fingerprint_checks(server, port, sni, delay=delay)
         stability = await check_stability(server, port, delay=delay)
         dpi = await check_dpi(server, port, sni, delay=delay)
+        await _safe_delay()
+        ip_reputation = await check_ip_reputation(resolved_ip)
     else:
         tcp_result, server_info, checker_info, dns_check = await asyncio.gather(
             check_tcp(server, port), get_server_info(server, port),
             get_checker_info(), check_dns(server))
+        resolved_ip = server_info.get("ip") if isinstance(server_info, dict) else None
         mtproto_result = None
         if secret_hex:
             mtproto_result = await check_mtproto(server, port, secret_hex)
-        tls_result, fingerprint_results = await asyncio.gather(
-            check_tls(server, port, sni), run_all_fingerprint_checks(server, port, sni))
+        tls_result, fingerprint_results, ip_reputation = await asyncio.gather(
+            check_tls(server, port, sni), run_all_fingerprint_checks(server, port, sni),
+            check_ip_reputation(resolved_ip))
         tls_cert, stability, dpi = await asyncio.gather(
             check_tls_certificate(server, port, sni),
             check_stability(server, port), check_dpi(server, port, sni))
@@ -220,6 +226,7 @@ async def _run_checks_local(server, port, sni, secret_hex, proxy_mode, safe_mode
         "fingerprints": fingerprint_results, "server_info": server_info,
         "checker_info": checker_info, "tls_cert": tls_cert,
         "stability": stability, "dpi": dpi, "dns": dns_check,
+        "ip_reputation": ip_reputation,
         "overall_status": overall,
     }
 

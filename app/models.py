@@ -75,6 +75,7 @@ class CheckResults(BaseModel):
     stability: Optional[dict] = None
     dpi: Optional[dict] = None
     dns: Optional[dict] = None
+    ip_reputation: Optional[dict] = None
     overall_status: str
 
 

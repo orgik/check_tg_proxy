@@ -3,21 +3,50 @@ set -e
 
 MASTER=""
 TOKEN=""
+ACTION="install"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --master) MASTER="$2"; shift 2;;
         --token) TOKEN="$2"; shift 2;;
+        update) ACTION="update"; shift;;
         *) shift;;
     esac
 done
 
-if [ -z "$MASTER" ] || [ -z "$TOKEN" ]; then
-    echo "Usage: bash install.sh --master http://SERVER --token TOKEN"
-    exit 1
+INSTALL_DIR="/opt/tg-agent"
+
+# ── UPDATE MODE ──────────────────────────────
+if [ "$ACTION" = "update" ]; then
+    if [ -z "$MASTER" ]; then
+        MASTER=$(grep -oP '(?<=--master )\S+' /etc/systemd/system/tg-agent.service 2>/dev/null || true)
+    fi
+    if [ -z "$MASTER" ]; then
+        echo "Usage: bash install.sh update --master http://SERVER"
+        exit 1
+    fi
+
+    echo "=== Updating agent from $MASTER ==="
+    curl -sL "$MASTER/static/agent/agent.py" -o "$INSTALL_DIR/agent.py"
+
+    mkdir -p "$INSTALL_DIR/client_hello"
+    for name in chrome_148_0_7778_179 curl linux_firefox_140_11_0esr safari_26_5_11_4; do
+        curl -sL "$MASTER/static/agent/client_hello/$name" -o "$INSTALL_DIR/client_hello/$name" 2>/dev/null || true
+    done
+
+    systemctl restart tg-agent
+    echo "Updated and restarted. Status:"
+    systemctl status tg-agent --no-pager -l || true
+    exit 0
 fi
 
-INSTALL_DIR="/opt/tg-agent"
+# ── FULL INSTALL ─────────────────────────────
+if [ -z "$MASTER" ] || [ -z "$TOKEN" ]; then
+    echo "Usage:"
+    echo "  Install: bash install.sh --master http://SERVER --token TOKEN"
+    echo "  Update:  bash install.sh update [--master http://SERVER]"
+    exit 1
+fi
 
 echo "=== TG Proxy Checker Agent Installer ==="
 echo "Master: $MASTER"
@@ -25,12 +54,12 @@ echo "Install dir: $INSTALL_DIR"
 echo ""
 
 # Install python and dependencies
-echo "[1/5] Installing Python dependencies..."
+echo "[1/6] Installing Python dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3 python3-pip python3-venv curl
 
 # Create dir
-echo "[2/5] Creating $INSTALL_DIR..."
+echo "[2/6] Creating $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
 # Download agent
@@ -83,5 +112,6 @@ echo ""
 echo "=== Done! ==="
 echo "Status:  systemctl status tg-agent"
 echo "Logs:    journalctl -u tg-agent -f"
+echo "Update:  curl -sL $MASTER/static/agent/install.sh | bash -s -- update"
 echo "Stop:    systemctl stop tg-agent"
 echo "Remove:  systemctl disable tg-agent && rm -rf $INSTALL_DIR /etc/systemd/system/tg-agent.service"

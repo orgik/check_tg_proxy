@@ -74,6 +74,28 @@ const LANGS = {
         mode_simple: 'Simple',
         mode_unknown: 'Неизвестно',
         tip_mtproto: 'Проверка MTProto протокола — отправляется обфусцированный пакет инициализации. Если прокси отвечает — он работает.',
+        ip_reputation_title: 'Репутация IP',
+        rep_abuse_score: 'Рейтинг злоупотреблений',
+        rep_reports: 'жалоб',
+        rep_vt_malicious: 'Вредоносный',
+        rep_vt_suspicious: 'подозрит.',
+        rep_shodan_ports: 'Открытые порты',
+        rep_shodan_vulns: 'Уязвимости',
+        rep_rbl_status: 'Чёрные списки (DNSBL)',
+        rep_risk_level: 'Уровень риска',
+        risk_low: 'Низкий',
+        risk_medium: 'Средний',
+        risk_high: 'Высокий',
+        rep_not_listed: 'Не в списках',
+        rep_listed_on: 'В списке',
+        rep_tor: 'Tor-узел',
+        rep_usage_type: 'Тип использования',
+        rep_vt_reputation: 'Репутация сообщества',
+        tip_rep_abuse: 'Рейтинг AbuseIPDB (0–100). 0 — чисто, 100 — множество жалоб.',
+        tip_rep_vt: 'Количество антивирусных движков, считающих IP вредоносным (VirusTotal).',
+        tip_rep_shodan: 'Открытые порты и известные уязвимости по данным Shodan.',
+        tip_rep_rbl: 'Наличие IP в DNS-блоклистах. Попадание — признак спама или злоупотреблений.',
+        tip_rep_risk: 'Общая оценка риска на основе всех источников.',
         dc_warning_title: 'Сервер отклоняет подключения из дата-центра',
         dc_warning_text: 'Прокси-сервер отказывает в подключении с нашего IP ({ip}, {location}). Многие MTProto-прокси блокируют датацентровые IP для защиты от обнаружения. Прокси может быть доступен с вашего домашнего/мобильного IP.',
         dc_warning_title_timeout: 'Сервер не отвечает из нашего дата-центра',
@@ -154,6 +176,28 @@ const LANGS = {
         mode_simple: 'Simple',
         mode_unknown: 'Unknown',
         tip_mtproto: 'MTProto protocol check — sends an obfuscated init packet. If the proxy responds, it is working.',
+        ip_reputation_title: 'IP Reputation',
+        rep_abuse_score: 'Abuse Score',
+        rep_reports: 'reports',
+        rep_vt_malicious: 'Malicious',
+        rep_vt_suspicious: 'suspicious',
+        rep_shodan_ports: 'Open Ports',
+        rep_shodan_vulns: 'Vulnerabilities',
+        rep_rbl_status: 'Blacklists (DNSBL)',
+        rep_risk_level: 'Risk Level',
+        risk_low: 'Low',
+        risk_medium: 'Medium',
+        risk_high: 'High',
+        rep_not_listed: 'Not listed',
+        rep_listed_on: 'Listed on',
+        rep_tor: 'Tor node',
+        rep_usage_type: 'Usage type',
+        rep_vt_reputation: 'Community reputation',
+        tip_rep_abuse: 'AbuseIPDB score (0–100). 0 is clean, 100 means many reports.',
+        tip_rep_vt: 'Number of antivirus engines marking this IP as malicious (VirusTotal).',
+        tip_rep_shodan: 'Open ports and known vulnerabilities from Shodan.',
+        tip_rep_rbl: 'IP presence in DNS blacklists. Being listed indicates spam or abuse history.',
+        tip_rep_risk: 'Overall risk assessment based on all sources.',
         dc_warning_title: 'Server rejects datacenter connections',
         dc_warning_text: 'The proxy server refuses connections from our IP ({ip}, {location}). Many MTProto proxies block datacenter IPs to avoid detection. The proxy may be accessible from your home/mobile IP.',
         dc_warning_title_timeout: 'Server not responding from our datacenter',
@@ -202,7 +246,7 @@ form.addEventListener('submit', async (e) => {
     try {
         const safeMode = document.getElementById('safeMode').checked;
         const selected = Array.from(document.querySelectorAll('.agent-chip input:checked')).map(el => el.value);
-        if (selected.length === 0) selected.push('');
+        if (!selected.includes('')) selected.unshift('');
 
         const res = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxy_link: link, safe_mode: safeMode, agent_ids: selected }) });
         if (!res.ok) { const data = await res.json(); throw new Error(data.detail || t('request_error')); }
@@ -433,6 +477,66 @@ function renderDpi(r) {
     el.innerHTML = rows.join('');
 }
 
+function renderIpReputation(r) {
+    const el = document.getElementById('ipReputationGrid');
+    const card = document.getElementById('ipReputationCard');
+    const rep = r.ip_reputation;
+    if (!rep) { card.classList.add('hidden'); return; }
+
+    const rows = [];
+
+    if (rep.abuseipdb && rep.abuseipdb.available) {
+        const a = rep.abuseipdb;
+        const scoreColor = a.abuse_confidence > 50 ? 'var(--danger)' :
+                          a.abuse_confidence > 20 ? 'var(--warning)' : 'var(--success)';
+        rows.push(tip('rep_abuse_score', 'tip_rep_abuse',
+            `<span style="color:${scoreColor}">${a.abuse_confidence}%</span> (${a.total_reports} ${t('rep_reports')})`));
+        if (a.is_tor) rows.push(row(t('rep_tor'), '<span style="color:var(--warning)">Yes</span>'));
+        if (a.usage_type) rows.push(row(t('rep_usage_type'), esc(a.usage_type)));
+    }
+
+    if (rep.virustotal && rep.virustotal.available) {
+        const v = rep.virustotal;
+        const malColor = v.malicious > 0 ? 'var(--danger)' : 'var(--success)';
+        rows.push(tip('rep_vt_malicious', 'tip_rep_vt',
+            `<span style="color:${malColor}">${v.malicious}</span> / ${v.suspicious} ${t('rep_vt_suspicious')}`));
+        if (v.reputation !== undefined) rows.push(row(t('rep_vt_reputation'), v.reputation));
+    }
+
+    if (rep.shodan && rep.shodan.available) {
+        const s = rep.shodan;
+        if (s.open_ports && s.open_ports.length > 0)
+            rows.push(tip('rep_shodan_ports', 'tip_rep_shodan', `<code>${s.open_ports.join(', ')}</code>`));
+        if (s.vulns && s.vulns.length > 0)
+            rows.push(tip('rep_shodan_vulns', 'tip_rep_shodan',
+                `<span style="color:var(--danger)">${s.vulns.join(', ')}</span>`));
+    }
+
+    if (rep.rbl && rep.rbl.available) {
+        const rbl = rep.rbl;
+        if (rbl.listed_count > 0) {
+            rows.push(tip('rep_rbl_status', 'tip_rep_rbl',
+                `<span style="color:var(--danger)">${t('rep_listed_on')}: ${rbl.listed_on.join(', ')}</span>`));
+        } else {
+            rows.push(tip('rep_rbl_status', 'tip_rep_rbl',
+                `<span style="color:var(--success)">${t('rep_not_listed')} (${rbl.checked})</span>`));
+        }
+    }
+
+    if (rep.risk_level) {
+        const riskColors = {low: 'var(--success)', medium: 'var(--warning)', high: 'var(--danger)'};
+        rows.push(tip('rep_risk_level', 'tip_rep_risk',
+            `<span style="color:${riskColors[rep.risk_level]}">${t('risk_' + rep.risk_level)}</span>`));
+    }
+
+    if (rows.length > 0) {
+        card.classList.remove('hidden');
+        el.innerHTML = rows.join('');
+    } else {
+        card.classList.add('hidden');
+    }
+}
+
 function renderDns(r) {
     const el = document.getElementById('dnsGrid');
     const card = document.getElementById('dnsCard');
@@ -538,6 +642,7 @@ function renderResults(r) {
     }
 
     renderInfoGrid(document.getElementById('serverInfoGrid'), r.server_info);
+    renderIpReputation(r);
     renderInfoGrid(document.getElementById('checkerInfoGrid'), r.checker_info);
     renderTlsCert(r);
     renderStability(r);
@@ -595,7 +700,7 @@ document.getElementById('shareBtn').addEventListener('click', () => {
         const sIsp = server.isp ? ` (${server.isp})` : '';
         const localLabel = sCity ? `${esc(sCity)}${esc(sIsp)}` : t('agent_local');
 
-        box.innerHTML = `<label class="agent-chip"><input type="checkbox" value="" checked>&#9733; ${localLabel}</label>` +
+        box.innerHTML = `<label class="agent-chip"><input type="checkbox" value="" checked disabled>&#9733; ${localLabel}</label>` +
             agents.map(a => {
                 const city = a.city || a.country || '?';
                 const isp = a.isp ? ` (${a.isp})` : '';
