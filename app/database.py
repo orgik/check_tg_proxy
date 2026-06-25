@@ -142,7 +142,7 @@ async def get_stats() -> dict:
     total = (await cursor.fetchone())[0]
     cursor = await db.execute("SELECT COUNT(*) FROM checks WHERE status='completed'")
     completed = (await cursor.fetchone())[0]
-    cursor = await db.execute("SELECT COUNT(*) FROM checks WHERE date(created_at)=date('now')")
+    cursor = await db.execute("SELECT COUNT(*) FROM checks WHERE created_at >= datetime('now', '-24 hours')")
     today = (await cursor.fetchone())[0]
     cursor = await db.execute(
         "SELECT COUNT(*) FROM checks WHERE status='completed' AND json_extract(tcp_result, '$.success')=1"
